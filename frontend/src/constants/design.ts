@@ -30,11 +30,29 @@ export const BREAKPOINT_RANGES = {
 // 2. Typography
 // ---------------------------------------------------------------------------
 
+/**
+ * Font stacks. The warp.co source uses proprietary commercial faces
+ * (Restart Soft, Berkeley Mono, Macan, New York) that we don't have
+ * licenses for. These are free look-alikes loaded via @fontsource:
+ *
+ *   warp.co        our stand-in            package
+ *   -----------    --------------------    -----------------------------
+ *   restartSoft →  Inter Variable          @fontsource-variable/inter
+ *   brandFont   →  Geist Variable          @fontsource-variable/geist
+ *   berkeleyMono → JetBrains Mono Variable @fontsource-variable/jetbrains-mono
+ *   newYork     →  Instrument Serif        @fontsource/instrument-serif
+ *
+ * The @fontsource imports live in src/main.tsx.
+ */
 export const FONT_FAMILIES = {
-  brand: "brandFont",
-  sans: "restartSoft",
-  mono: "berkeleyMono",
-  serif: "newYork",
+  brand:
+    "'Geist Variable', 'Inter Variable', system-ui, -apple-system, sans-serif",
+  sans:
+    "'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  mono:
+    "'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+  serif:
+    "'Instrument Serif', Georgia, 'Times New Roman', serif",
 } as const;
 
 export const FONT_WEIGHTS = {
@@ -80,7 +98,7 @@ export const LEADING = {
 
 export const HEADING_SPECS = {
   h1Hero: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 48,
     lineHeight: 57.6,
     weight: 500,
@@ -88,7 +106,7 @@ export const HEADING_SPECS = {
     color: "rgb(32, 32, 32)",
   },
   h2Section: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 35,
     lineHeight: 40,
     weight: 450,
@@ -96,7 +114,7 @@ export const HEADING_SPECS = {
     color: "oklch(0.608 0 none)",
   },
   h2LedeBold: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 35,
     lineHeight: 40,
     weight: 450,
@@ -104,7 +122,7 @@ export const HEADING_SPECS = {
     color: "oklch(0.243 0 none)",
   },
   heroSubtext: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 18,
     lineHeight: 27,
     weight: 400,
@@ -112,7 +130,7 @@ export const HEADING_SPECS = {
     color: "color(display-p3 0 0 0 / 0.61)",
   },
   h3CardTitle: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 16,
     lineHeight: 24,
     weight: 500,
@@ -120,7 +138,7 @@ export const HEADING_SPECS = {
     color: "oklch(0.243 0 none)",
   },
   bodyParagraph: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 16,
     lineHeight: 24,
     weight: 400,
@@ -128,7 +146,7 @@ export const HEADING_SPECS = {
     color: "oklch(0.243 0 none)",
   },
   footerHeading: {
-    font: "restartSoft",
+    font: FONT_FAMILIES.sans,
     size: 14,
     weight: 450,
     tracking: "normal",
@@ -451,10 +469,10 @@ export const LAPTOP_UTILITIES = [
 
 export const QUICK_SUMMARY = {
   fonts: {
-    primary: "restartSoft",
-    mono: "berkeleyMono",
-    serif: "newYork",
-    display: "brandFont",
+    primary: FONT_FAMILIES.sans,
+    mono: FONT_FAMILIES.mono,
+    serif: FONT_FAMILIES.serif,
+    display: FONT_FAMILIES.brand,
   },
   body: { size: 16, lineHeight: 24, weight: 400, color: "oklch(0.243 0 none)" },
   primaryCta: { bg: "#FF3D00", fg: "#ffffff", radius: 8 },
