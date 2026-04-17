@@ -21,28 +21,28 @@ export function StatPill({ label, value, delta, accent }: StatPillProps) {
         background: 'var(--color-card)',
         borderRadius: RADIUS.xl,
         boxShadow: SHADOWS.border,
-        padding: '18px 20px',
-        minHeight: 96,
+        padding: '14px 16px',
+        minHeight: 84,
       }}
     >
       <div
         style={{
-          fontSize: 13,
-          lineHeight: '18px',
+          fontSize: 12,
+          lineHeight: '16px',
           color: 'var(--color-gray-10)',
-          fontWeight: 450,
-          letterSpacing: '0.01em',
+          fontWeight: 500,
+          letterSpacing: '0.03em',
           textTransform: 'uppercase',
         }}
       >
         {label}
       </div>
-      <div className="flex items-baseline gap-[10px] mt-[10px]">
+      <div className="flex items-baseline gap-[8px] mt-[8px]">
         <span
           style={{
             fontFamily: FONT_FAMILIES.brand,
-            fontSize: 34,
-            lineHeight: '40px',
+            fontSize: 26,
+            lineHeight: '32px',
             fontWeight: 500,
             letterSpacing: '-0.02em',
             color: accent ? 'var(--color-accent-11)' : 'var(--color-gray-12)',
@@ -53,8 +53,8 @@ export function StatPill({ label, value, delta, accent }: StatPillProps) {
         {delta && (
           <span
             style={{
-              fontSize: 13,
-              lineHeight: '18px',
+              fontSize: 12,
+              lineHeight: '16px',
               fontWeight: 500,
               color: toneColor,
             }}

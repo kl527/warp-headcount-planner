@@ -54,10 +54,10 @@ export function MonthCard({
       className="text-left flex flex-col justify-between cursor-pointer transition-shadow"
       style={{
         background: 'var(--color-card)',
-        borderRadius: RADIUS['2xl'],
+        borderRadius: RADIUS.xl,
         boxShadow: ring,
-        padding: '20px 22px',
-        minHeight: 172,
+        padding: '16px 18px',
+        minHeight: 148,
       }}
     >
       <div className="flex items-start justify-between">
@@ -102,14 +102,14 @@ export function MonthCard({
         )}
       </div>
 
-      <div className="flex items-baseline gap-[10px] mt-[14px]">
+      <div className="flex items-baseline gap-[8px] mt-[10px]">
         <span
           style={{
             fontFamily: FONT_FAMILIES.brand,
-            fontSize: 40,
-            lineHeight: '44px',
+            fontSize: 28,
+            lineHeight: '32px',
             fontWeight: 500,
-            letterSpacing: '-0.025em',
+            letterSpacing: '-0.022em',
             color:
               hires.length === 0
                 ? 'var(--color-gray-8)'
@@ -120,8 +120,8 @@ export function MonthCard({
         </span>
         <span
           style={{
-            fontSize: 13,
-            lineHeight: '18px',
+            fontSize: 12,
+            lineHeight: '16px',
             color: 'var(--color-gray-10)',
             fontWeight: 450,
           }}

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   BRAND_CTA,
   FONT_FAMILIES,
@@ -52,60 +54,37 @@ export function HeadcountPlanner() {
 
   return (
     <div className="flex flex-col min-h-svh">
-      <TopBar year={year} onPrevYear={() => setYear(year - 1)} onNextYear={() => setYear(year + 1)} />
+      <TopBar />
+      <SubNav
+        year={year}
+        view={view}
+        onPrevYear={() => setYear(year - 1)}
+        onNextYear={() => setYear(year + 1)}
+        onChangeView={setView}
+      />
 
       <main
-        className="mx-auto w-full px-[24px] tablet:px-[32px] laptop:px-[48px] py-[40px] laptop:py-[64px] flex flex-col gap-[36px]"
+        className="mx-auto w-full px-[24px] tablet:px-[32px] laptop:px-[48px] py-[24px] laptop:py-[32px] flex flex-col gap-[24px]"
         style={{ maxWidth: PAGE_WIDTH.max }}
       >
-        <header className="flex flex-col gap-[20px] laptop:flex-row laptop:items-end laptop:justify-between">
-          <div>
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: '18px',
-                color: 'var(--color-gray-10)',
-                fontWeight: 500,
-                letterSpacing: '0.05em',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-              }}
-            >
-              {year} plan
-            </div>
-            <h1
-              style={{
-                fontFamily: HEADING_SPECS.h1Hero.font,
-                fontSize: HEADING_SPECS.h1Hero.size,
-                lineHeight: `${HEADING_SPECS.h1Hero.lineHeight}px`,
-                fontWeight: HEADING_SPECS.h1Hero.weight,
-                color: HEADING_SPECS.h1Hero.color,
-                letterSpacing: '-0.02em',
-                margin: 0,
-              }}
-            >
+        <header className="flex flex-col gap-[4px]">
+          <h2
+            style={{
+              fontFamily: HEADING_SPECS.h2LedeBold.font,
+              fontSize: 28,
+              lineHeight: '34px',
+              fontWeight: HEADING_SPECS.h2LedeBold.weight,
+              letterSpacing: '-0.018em',
+              margin: 0,
+            }}
+          >
+            <span style={{ color: HEADING_SPECS.h2LedeBold.color }}>
               Headcount plan.
-            </h1>
-            <p
-              className="mt-[8px]"
-              style={{
-                fontFamily: HEADING_SPECS.heroSubtext.font,
-                fontSize: HEADING_SPECS.heroSubtext.size,
-                lineHeight: `${HEADING_SPECS.heroSubtext.lineHeight}px`,
-                fontWeight: HEADING_SPECS.heroSubtext.weight,
-                color: HEADING_SPECS.heroSubtext.color,
-                maxWidth: 520,
-                margin: 0,
-              }}
-            >
-              Track planned hires, open reqs, and committed spend across the
-              year. Toggle into any month for the detail view.
-            </p>
-          </div>
-          <div className="flex items-center gap-[12px]">
-            <ViewToggle value={view} onChange={setView} />
-            <AddHireButton />
-          </div>
+            </span>{' '}
+            <span style={{ color: HEADING_SPECS.h2Section.color }}>
+              {yearHires.length} roles across the {year} year.
+            </span>
+          </h2>
         </header>
 
         <StatRow hires={yearHires} />
@@ -132,18 +111,10 @@ export function HeadcountPlanner() {
   );
 }
 
-function TopBar({
-  year,
-  onPrevYear,
-  onNextYear,
-}: {
-  year: number;
-  onPrevYear: () => void;
-  onNextYear: () => void;
-}) {
+function TopBar() {
   return (
     <div
-      className="sticky top-0 z-10 flex items-center justify-between px-[24px] tablet:px-[32px] laptop:px-[48px]"
+      className="sticky top-0 z-20 flex items-center justify-between px-[24px] tablet:px-[32px] laptop:px-[48px]"
       style={{
         height: HEADER.height,
         background: HEADER.background,
@@ -181,8 +152,37 @@ function TopBar({
           PLAN
         </span>
       </div>
+    </div>
+  );
+}
+
+function SubNav({
+  year,
+  view,
+  onPrevYear,
+  onNextYear,
+  onChangeView,
+}: {
+  year: number;
+  view: View;
+  onPrevYear: () => void;
+  onNextYear: () => void;
+  onChangeView: (v: View) => void;
+}) {
+  return (
+    <div
+      className="sticky z-10 flex items-center justify-between px-[24px] tablet:px-[32px] laptop:px-[48px]"
+      style={{
+        top: HEADER.height,
+        height: 52,
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'saturate(180%) blur(10px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(10px)',
+        boxShadow: 'inset 0 -1px 0 rgba(0, 0, 0, 0.06)',
+      }}
+    >
       <div
-        className="flex items-center gap-[6px]"
+        className="flex items-center gap-[4px]"
         style={{
           fontFamily: FONT_FAMILIES.brand,
           fontSize: 14,
@@ -191,33 +191,38 @@ function TopBar({
           color: 'var(--color-gray-12)',
         }}
       >
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onPrevYear}
           aria-label="Previous year"
-          className="inline-flex items-center justify-center cursor-pointer"
+        >
+          <ChevronLeft />
+        </Button>
+        <span
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            color: 'var(--color-gray-11)',
+            fontVariantNumeric: 'tabular-nums',
+            minWidth: 48,
+            textAlign: 'center',
           }}
         >
-          ‹
-        </button>
-        <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{year}</span>
-        <button
+          {year}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onNextYear}
           aria-label="Next year"
-          className="inline-flex items-center justify-center cursor-pointer"
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            color: 'var(--color-gray-11)',
-          }}
         >
-          ›
-        </button>
+          <ChevronRight />
+        </Button>
+      </div>
+      <div className="flex items-center gap-[10px]">
+        <ViewToggle value={view} onChange={onChangeView} />
+        <Button>
+          <Plus data-icon="inline-start" />
+          Add hire
+        </Button>
       </div>
     </div>
   );
@@ -243,25 +248,5 @@ function BrandMark() {
     >
       w
     </span>
-  );
-}
-
-function AddHireButton() {
-  return (
-    <button
-      className="inline-flex items-center justify-center cursor-pointer"
-      style={{
-        background: BRAND_CTA.bg,
-        color: BRAND_CTA.fg,
-        height: 32,
-        padding: '0 14px',
-        borderRadius: 8,
-        fontSize: 14,
-        lineHeight: '20px',
-        fontWeight: 450,
-      }}
-    >
-      + Add hire
-    </button>
   );
 }

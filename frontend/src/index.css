@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /* Token layer mirrors frontend/src/constants/design.ts.
    design.ts is the source of truth for TypeScript; this block
@@ -133,4 +135,72 @@ a {
 button {
   font: inherit;
   color: inherit;
+}
+
+/* Bridge: map shadcn's semantic slots to our warp tokens.
+   shadcn components read from --color-primary, --color-foreground, etc.
+   (via @theme inline indirection → :root vars). Wiring them to our
+   design tokens is what makes every shadcn component inherit
+   Warp styling without per-component overrides.
+
+   Intentionally dropped: --font-sans override (keep Inter as sans;
+   shadcn's Geist default would clobber our stack), --radius-* scale
+   (our pixel radii in @theme above win), .dark block (this app is
+   light-only per html{color-scheme:light}). */
+@theme inline {
+  --font-heading: var(--font-brand);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-foreground: var(--foreground);
+}
+
+:root {
+  /* surfaces */
+  --foreground: var(--color-gray-12);
+  --card-foreground: var(--color-gray-12);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-gray-12);
+
+  /* primary = Warp CTA orange */
+  --primary: var(--color-brand-cta);
+  --primary-foreground: #ffffff;
+
+  /* neutral grays for secondary surfaces + hover states */
+  --secondary: var(--color-gray-2);
+  --secondary-foreground: var(--color-gray-12);
+  --muted: var(--color-gray-2);
+  --muted-foreground: var(--color-gray-10);
+  --accent: var(--color-gray-2);
+  --accent-foreground: var(--color-gray-12);
+
+  /* feedback */
+  --destructive: var(--color-warpred-11);
+
+  /* borders + focus — aligned with SHADOWS.border ring color (#00000014) */
+  --border: oklch(0 0 0 / 0.08);
+  --input: oklch(0 0 0 / 0.08);
+  --ring: var(--color-brand-cta);
+
+  /* shadcn radius handle — components read this for variant sizes.
+     0.5rem = 8px matches RADIUS.lg, our default interactive radius. */
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 }

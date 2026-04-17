@@ -19,7 +19,7 @@ export function YearlyView({
   onMonthClick,
 }: YearlyViewProps) {
   return (
-    <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 xl:grid-cols-4 gap-[18px]">
+    <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 xl:grid-cols-4 gap-[12px]">
       {Array.from({ length: 12 }).map((_, i) => {
         const key = monthKey(year, i);
         const monthHires = hiresForMonth(hires, key);

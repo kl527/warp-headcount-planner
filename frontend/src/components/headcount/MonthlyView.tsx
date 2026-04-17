@@ -1,4 +1,6 @@
-import { FONT_FAMILIES, HEADING_SPECS } from '../../constants/design';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { HEADING_SPECS } from '../../constants/design';
 import {
   MONTH_LABELS,
   STATUS_COLOR,
@@ -76,22 +78,27 @@ export function MonthlyView({
   return (
     <div>
       <div className="flex items-center justify-between mb-[20px]">
-        <button
-          onClick={onBack}
-          style={{
-            fontSize: 13,
-            lineHeight: '20px',
-            color: 'var(--color-gray-11)',
-            fontWeight: 450,
-            cursor: 'pointer',
-            padding: '4px 0',
-          }}
-        >
-          ← Back to year
-        </button>
-        <div className="flex items-center gap-[8px]">
-          <StepperButton label="‹" onClick={onPrev} />
-          <StepperButton label="›" onClick={onNext} />
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <ChevronLeft data-icon="inline-start" />
+          Back to year
+        </Button>
+        <div className="flex items-center gap-[6px]">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={onPrev}
+            aria-label="Previous month"
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={onNext}
+            aria-label="Next month"
+          >
+            <ChevronRight />
+          </Button>
         </div>
       </div>
 
@@ -129,35 +136,6 @@ export function MonthlyView({
         </div>
       </div>
     </div>
-  );
-}
-
-function StepperButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center justify-center cursor-pointer"
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        background: 'var(--color-card)',
-        boxShadow: '0 0 0 1px #00000014',
-        color: 'var(--color-gray-12)',
-        fontFamily: FONT_FAMILIES.brand,
-        fontSize: 18,
-        lineHeight: 1,
-      }}
-      aria-label={label === '‹' ? 'Previous month' : 'Next month'}
-    >
-      {label}
-    </button>
   );
 }
 
