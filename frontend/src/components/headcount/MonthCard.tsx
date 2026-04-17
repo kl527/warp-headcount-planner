@@ -1,15 +1,6 @@
 import { useState } from 'react';
-import {
-  BRAND_CTA,
-  FONT_FAMILIES,
-  RADIUS,
-  SHADOWS,
-} from '../../constants/design';
-import {
-  MONTH_LABELS,
-  type Hire,
-  type Team,
-} from '../../data/headcount';
+import { BRAND_CTA, FONT_FAMILIES } from '../../constants/design';
+import { MONTH_LABELS, type Hire, type Team } from '../../data/headcount';
 import { TeamChip } from './TeamChip';
 
 interface MonthCardProps {
@@ -32,7 +23,6 @@ export function MonthCard({
   const filled = hires.filter((h) => h.status === 'filled').length;
   const open = hires.filter((h) => h.status === 'open').length;
 
-  // unique teams, preserving encounter order
   const teams: Team[] = [];
   for (const h of hires) {
     if (!teams.includes(h.team)) teams.push(h.team);
@@ -40,26 +30,38 @@ export function MonthCard({
   const visibleTeams = teams.slice(0, 3);
   const overflow = teams.length - visibleTeams.length;
 
-  const ring = isCurrent
-    ? `0 0 0 1.5px ${BRAND_CTA.bg}, 0 1px 1px #0000000a`
+  const background = isCurrent
+    ? 'var(--color-accent-2)'
     : hover
-      ? SHADOWS.borderMedium
-      : SHADOWS.border;
+      ? 'var(--color-gray-2)'
+      : 'var(--color-card)';
 
   return (
     <button
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="text-left flex flex-col justify-between cursor-pointer transition-shadow"
+      className="text-left flex flex-col justify-between cursor-pointer transition-colors relative"
       style={{
-        background: 'var(--color-card)',
-        borderRadius: RADIUS.xl,
-        boxShadow: ring,
+        background,
         padding: '16px 18px',
-        minHeight: 148,
+        minHeight: 152,
       }}
     >
+      {isCurrent && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 2,
+            background: BRAND_CTA.bg,
+          }}
+        />
+      )}
+
       <div className="flex items-start justify-between">
         <div>
           <div

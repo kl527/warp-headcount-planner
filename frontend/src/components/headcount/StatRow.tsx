@@ -1,3 +1,4 @@
+import { RADIUS, SHADOWS } from '../../constants/design';
 import type { Hire } from '../../data/headcount';
 import { StatPill } from './StatPill';
 
@@ -14,32 +15,49 @@ export function StatRow({ hires }: { hires: Hire[] }) {
   const planned = hires.length;
   const cost = hires.reduce((s, h) => s + h.estCostUsd, 0);
 
+  const cellBg = 'var(--color-gray-2)';
+
   return (
-    <div className="grid grid-cols-2 tablet:grid-cols-4 gap-[16px]">
-      <StatPill
-        label="Planned hires"
-        value={String(planned)}
-        delta={{
-          text: `${filled + accepted} committed`,
-          tone: 'positive',
-        }}
-      />
-      <StatPill
-        label="Filled"
-        value={String(filled)}
-        delta={{ text: `+${accepted} accepted`, tone: 'positive' }}
-      />
-      <StatPill
-        label="Open reqs"
-        value={String(open)}
-        delta={{ text: `${open} in market`, tone: 'warning' }}
-      />
-      <StatPill
-        label="Est. annual cost"
-        value={fmtCurrencyCompact(cost)}
-        delta={{ text: `${planned} roles`, tone: 'neutral' }}
-        accent
-      />
+    <div
+      className="grid grid-cols-2 tablet:grid-cols-4 gap-px overflow-hidden"
+      style={{
+        background: 'oklch(0 0 0 / 0.06)',
+        borderRadius: RADIUS.xl,
+        boxShadow: SHADOWS.borderInset,
+      }}
+    >
+      <div style={{ background: cellBg }}>
+        <StatPill
+          label="Planned hires"
+          value={String(planned)}
+          delta={{
+            text: `${filled + accepted} committed`,
+            tone: 'positive',
+          }}
+        />
+      </div>
+      <div style={{ background: cellBg }}>
+        <StatPill
+          label="Filled"
+          value={String(filled)}
+          delta={{ text: `+${accepted} accepted`, tone: 'positive' }}
+        />
+      </div>
+      <div style={{ background: cellBg }}>
+        <StatPill
+          label="Open reqs"
+          value={String(open)}
+          delta={{ text: `${open} in market`, tone: 'warning' }}
+        />
+      </div>
+      <div style={{ background: cellBg }}>
+        <StatPill
+          label="Est. annual cost"
+          value={fmtCurrencyCompact(cost)}
+          delta={{ text: `${planned} roles`, tone: 'neutral' }}
+          accent
+        />
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { FONT_FAMILIES, RADIUS, SHADOWS } from '../../constants/design';
+import { FONT_FAMILIES } from '../../constants/design';
 
 interface StatPillProps {
   label: string;
@@ -18,20 +18,17 @@ export function StatPill({ label, value, delta, accent }: StatPillProps) {
     <div
       className="flex flex-col justify-between"
       style={{
-        background: 'var(--color-card)',
-        borderRadius: RADIUS.xl,
-        boxShadow: SHADOWS.border,
-        padding: '14px 16px',
+        padding: '14px 18px',
         minHeight: 84,
       }}
     >
       <div
         style={{
-          fontSize: 12,
+          fontSize: 11,
           lineHeight: '16px',
           color: 'var(--color-gray-10)',
           fontWeight: 500,
-          letterSpacing: '0.03em',
+          letterSpacing: '0.04em',
           textTransform: 'uppercase',
         }}
       >
