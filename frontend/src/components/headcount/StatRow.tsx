@@ -1,6 +1,12 @@
-import { RADIUS, SHADOWS } from '../../constants/design';
+import {
+  Calendar,
+  DollarSign,
+  FileText,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { FONT_FAMILIES, RADIUS, SHADOWS } from '../../constants/design';
 import type { Hire } from '../../data/headcount';
-import { StatPill } from './StatPill';
 
 function fmtCurrencyCompact(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -9,54 +15,79 @@ function fmtCurrencyCompact(n: number): string {
 }
 
 export function StatRow({ hires }: { hires: Hire[] }) {
-  const filled = hires.filter((h) => h.status === 'filled').length;
-  const accepted = hires.filter((h) => h.status === 'accepted').length;
-  const open = hires.filter((h) => h.status === 'open').length;
-  const planned = hires.length;
   const cost = hires.reduce((s, h) => s + h.estCostUsd, 0);
-
-  const cellBg = 'var(--color-gray-2)';
 
   return (
     <div
-      className="grid grid-cols-2 tablet:grid-cols-4 gap-px overflow-hidden"
+      className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-px overflow-hidden"
       style={{
-        background: 'oklch(0 0 0 / 0.06)',
+        background: 'oklch(0 0 0 / 0.08)',
         borderRadius: RADIUS.xl,
-        boxShadow: SHADOWS.borderInset,
+        boxShadow: SHADOWS.borderMedium,
       }}
     >
-      <div style={{ background: cellBg }}>
-        <StatPill
-          label="Planned hires"
-          value={String(planned)}
-          delta={{
-            text: `${filled + accepted} committed`,
-            tone: 'positive',
+      <StatCell
+        icon={DollarSign}
+        label="Est. annual cost"
+        value={fmtCurrencyCompact(cost)}
+      />
+      <StatCell icon={Users} label="Placeholder" value="—" />
+      <StatCell icon={FileText} label="Placeholder" value="—" />
+      <StatCell icon={Calendar} label="Placeholder" value="—" />
+    </div>
+  );
+}
+
+function StatCell({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      className="grid items-start"
+      style={{
+        background: 'var(--color-card)',
+        padding: '20px 24px',
+        gridTemplateColumns: 'auto 1fr',
+        columnGap: 10,
+      }}
+    >
+      <Icon
+        size={22}
+        strokeWidth={1.9}
+        style={{
+          color: 'var(--color-gray-12)',
+          marginTop: 0,
+        }}
+      />
+      <div className="flex flex-col gap-[10px]">
+        <div
+          style={{
+            fontSize: 14,
+            lineHeight: '20px',
+            color: 'var(--color-gray-10)',
+            fontWeight: 450,
           }}
-        />
-      </div>
-      <div style={{ background: cellBg }}>
-        <StatPill
-          label="Filled"
-          value={String(filled)}
-          delta={{ text: `+${accepted} accepted`, tone: 'positive' }}
-        />
-      </div>
-      <div style={{ background: cellBg }}>
-        <StatPill
-          label="Open reqs"
-          value={String(open)}
-          delta={{ text: `${open} in market`, tone: 'warning' }}
-        />
-      </div>
-      <div style={{ background: cellBg }}>
-        <StatPill
-          label="Est. annual cost"
-          value={fmtCurrencyCompact(cost)}
-          delta={{ text: `${planned} roles`, tone: 'neutral' }}
-          accent
-        />
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            fontFamily: FONT_FAMILIES.sans,
+            fontSize: 20,
+            lineHeight: '28px',
+            fontWeight: 600,
+            letterSpacing: '-0.01em',
+            color: 'var(--color-gray-12)',
+          }}
+        >
+          {value}
+        </div>
       </div>
     </div>
   );

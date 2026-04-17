@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   BRAND_CTA,
@@ -12,7 +12,6 @@ import {
 import {
   HIRES,
   PLAN_YEAR,
-  currentMonthKey,
   hiresForYear,
   monthKey,
 } from '../../data/headcount';
@@ -29,7 +28,6 @@ export function HeadcountPlanner() {
   );
 
   const yearHires = hiresForYear(HIRES, year);
-  const nowKey = currentMonthKey();
 
   const goToMonth = (key: string) => {
     setFocusedMonth(key);
@@ -73,29 +71,20 @@ export function HeadcountPlanner() {
               fontFamily: HEADING_SPECS.h2LedeBold.font,
               fontSize: 28,
               lineHeight: '34px',
-              fontWeight: HEADING_SPECS.h2LedeBold.weight,
+              fontWeight: 700,
               letterSpacing: '-0.018em',
               margin: 0,
+              color: HEADING_SPECS.h2LedeBold.color,
             }}
           >
-            <span style={{ color: HEADING_SPECS.h2LedeBold.color }}>
-              Headcount plan.
-            </span>{' '}
-            <span style={{ color: HEADING_SPECS.h2Section.color }}>
-              {yearHires.length} roles across the {year} year.
-            </span>
+            Headcount plan
           </h2>
         </header>
 
         <StatRow hires={yearHires} />
 
         {view === 'year' ? (
-          <YearlyView
-            hires={yearHires}
-            year={year}
-            currentMonthKey={nowKey}
-            onMonthClick={goToMonth}
-          />
+          <YearlyView year={year} onMonthClick={goToMonth} />
         ) : (
           <MonthlyView
             hires={yearHires}
@@ -219,10 +208,6 @@ function SubNav({
       </div>
       <div className="flex items-center gap-[10px]">
         <ViewToggle value={view} onChange={onChangeView} />
-        <Button>
-          <Plus data-icon="inline-start" />
-          Add hire
-        </Button>
       </div>
     </div>
   );
