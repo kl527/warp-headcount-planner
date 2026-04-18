@@ -53,7 +53,10 @@ function annualForRoleKey(
   roleKey: string,
   families: RoleFamily[] | null,
   multiplier: number,
+  overrides: Record<string, number>,
 ): number {
+  const override = overrides[roleKey];
+  if (override !== undefined) return override;
   if (!families) return 0;
   const family = families.find((f) => f.key === roleKey);
   return family ? Math.round(maxP50(family) * multiplier) : 0;
@@ -130,6 +133,9 @@ function PlannerInner() {
   const [assignments, setAssignments] = useState<
     Record<number, MonthAssignment[]>
   >({});
+  const [roleSalaryOverrides, setRoleSalaryOverrides] = useState<
+    Record<string, number>
+  >({});
   const [view, setView] = useState<View>('month');
   const [focusedYear, setFocusedYear] = useState<number>(0);
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
@@ -162,6 +168,13 @@ function PlannerInner() {
     setManualLocation(next);
   }, []);
 
+  const handleRoleSalaryChange = useCallback(
+    (roleKey: string, annualUsd: number) => {
+      setRoleSalaryOverrides((prev) => ({ ...prev, [roleKey]: annualUsd }));
+    },
+    [],
+  );
+
   const locationMultiplier = locationsMap?.[selectedLocation] ?? 1;
 
   const baselineBurn =
@@ -176,7 +189,12 @@ function PlannerInner() {
     for (const a of list) {
       placedRoles.push({
         startMonth,
-        annualUsd: annualForRoleKey(a.roleKey, families, locationMultiplier),
+        annualUsd: annualForRoleKey(
+          a.roleKey,
+          families,
+          locationMultiplier,
+          roleSalaryOverrides,
+        ),
       });
     }
   }
@@ -364,6 +382,8 @@ function PlannerInner() {
             view={view}
             selectedLocation={selectedLocation}
             onLocationChange={handleLocationChange}
+            roleSalaryOverrides={roleSalaryOverrides}
+            onRoleSalaryChange={handleRoleSalaryChange}
           />
 
           <div className="flex-1 min-w-0 flex flex-col gap-[14px]">

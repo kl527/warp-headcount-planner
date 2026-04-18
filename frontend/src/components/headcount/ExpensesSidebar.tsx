@@ -103,6 +103,7 @@ function familiesToTeamGroups(
   families: RoleFamily[],
   view: View,
   multiplier: number,
+  overrides: Record<string, number>,
 ): TeamGroup[] {
   const byTeam = new Map<SalaryTeam, RoleFamily[]>();
   for (const f of families) {
@@ -113,19 +114,21 @@ function familiesToTeamGroups(
   }
   return TEAM_ORDER.filter((t) => byTeam.has(t)).map((team) => {
     const leadKey = TEAM_LEAD_ROLE[team];
+    const annualFor = (f: RoleFamily) =>
+      overrides[f.key] ?? Math.round(maxP50(f) * multiplier);
     const sorted = byTeam
       .get(team)!
       .slice()
       .sort((a, b) => {
         if (a.key === leadKey) return -1;
         if (b.key === leadKey) return 1;
-        return maxP50(b) - maxP50(a);
+        return annualFor(b) - annualFor(a);
       });
     return {
       team,
       items: sorted.map((f) => {
         const label = ROLE_SHORT_LABEL[f.key] ?? f.displayName;
-        const annual = Math.round(maxP50(f) * multiplier);
+        const annual = annualFor(f);
         return {
           id: f.key,
           label,
@@ -149,11 +152,13 @@ function StackedTeamGroup({
   expanded,
   onToggle,
   onSetExpanded,
+  onItemValueChange,
 }: {
   items: ExpenseItem[];
   expanded: boolean;
   onToggle: () => void;
   onSetExpanded: (next: boolean) => void;
+  onItemValueChange?: (id: string, next: number) => void;
 }) {
   const total = items.length;
   const visibleInStack = Math.min(MAX_VISIBLE_STACK, total);
@@ -228,7 +233,15 @@ function StackedTeamGroup({
               pointerEvents: hiddenInStack ? 'none' : 'auto',
             }}
           >
-            <ExpenseRow item={item} draggable={expanded && !hiddenInStack} />
+            <ExpenseRow
+              item={item}
+              draggable={expanded && !hiddenInStack}
+              onValueChange={
+                onItemValueChange
+                  ? (next) => onItemValueChange(item.id, next)
+                  : undefined
+              }
+            />
           </div>
         );
       })}
@@ -688,6 +701,8 @@ interface ExpensesSidebarProps {
   view: View;
   selectedLocation: LocationKey;
   onLocationChange: (next: LocationKey) => void;
+  roleSalaryOverrides: Record<string, number>;
+  onRoleSalaryChange: (roleKey: string, annualUsd: number) => void;
 }
 
 export function ExpensesSidebar({
@@ -696,6 +711,8 @@ export function ExpensesSidebar({
   view,
   selectedLocation,
   onLocationChange,
+  roleSalaryOverrides,
+  onRoleSalaryChange,
 }: ExpensesSidebarProps) {
   const state = useSalaryCatalog();
   const multiplier =
@@ -704,8 +721,17 @@ export function ExpensesSidebar({
       : 1;
   const teamGroups =
     state.status === 'ready'
-      ? familiesToTeamGroups(state.catalog.families, view, multiplier)
+      ? familiesToTeamGroups(
+          state.catalog.families,
+          view,
+          multiplier,
+          roleSalaryOverrides,
+        )
       : [];
+  const handleRoleItemValueChange = (roleKey: string, displayed: number) => {
+    const annual = view === 'year' ? displayed : displayed * 12;
+    onRoleSalaryChange(roleKey, annual);
+  };
   const valueMultiplier = view === 'year' ? 12 : 1;
   const [expensesCollapsed, setExpensesCollapsed] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
@@ -791,6 +817,7 @@ export function ExpensesSidebar({
                 return cur === g.team ? null : cur;
               })
             }
+            onItemValueChange={handleRoleItemValueChange}
           />
         ))}
       </StaggeredCollapse>
