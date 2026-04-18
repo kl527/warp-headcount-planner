@@ -1,13 +1,16 @@
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
+import { MoneyInput } from './MoneyInput';
 
 function LabeledMoneyInput({
   label,
   value,
   prefix,
+  onChange,
 }: {
   label: string;
-  value: string;
+  value: number;
   prefix: string;
+  onChange: (next: number) => void;
 }) {
   return (
     <label className="flex flex-col gap-[9px] min-w-0">
@@ -43,9 +46,9 @@ function LabeledMoneyInput({
         >
           {prefix}
         </span>
-        <input
-          type="text"
-          defaultValue={value}
+        <MoneyInput
+          value={value}
+          onChange={onChange}
           style={{
             flex: 1,
             minWidth: 0,
@@ -64,12 +67,38 @@ function LabeledMoneyInput({
   );
 }
 
-export function FinancialInputsRow() {
+export interface FinancialInputs {
+  companyBalance: number;
+  mrr: number;
+  momGrowthPct: number;
+}
+
+interface FinancialInputsRowProps {
+  values: FinancialInputs;
+  onChange: (patch: Partial<FinancialInputs>) => void;
+}
+
+export function FinancialInputsRow({ values, onChange }: FinancialInputsRowProps) {
   return (
     <div className="grid grid-cols-1 tablet:grid-cols-3 gap-[16px] tablet:gap-[14px] laptop:gap-[30px]">
-      <LabeledMoneyInput label="Company Balance" value="1,000,000" prefix="$" />
-      <LabeledMoneyInput label="MRR" value="150,000" prefix="$" />
-      <LabeledMoneyInput label="MoM Growth" value="20" prefix="%" />
+      <LabeledMoneyInput
+        label="Company Balance"
+        value={values.companyBalance}
+        prefix="$"
+        onChange={(next) => onChange({ companyBalance: next })}
+      />
+      <LabeledMoneyInput
+        label="MRR"
+        value={values.mrr}
+        prefix="$"
+        onChange={(next) => onChange({ mrr: next })}
+      />
+      <LabeledMoneyInput
+        label="MoM Growth"
+        value={values.momGrowthPct}
+        prefix="%"
+        onChange={(next) => onChange({ momGrowthPct: next })}
+      />
     </div>
   );
 }

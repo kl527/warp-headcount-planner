@@ -28,6 +28,7 @@ import {
   type RoleFamily,
   type Team as SalaryTeam,
 } from '../../lib/salaryApi';
+import { MoneyInput } from './MoneyInput';
 import { useRoleDnd, type RoleCard } from './roleDnd';
 
 const SECTION_BLACK = '#000';
@@ -36,40 +37,25 @@ type ExpenseItem = {
   id: string;
   label: string;
   icon: LucideIcon;
-  value: string;
+  value: number;
   iconBg: string;
   roleCard?: RoleCard;
 };
 
-const EXPENSE_ITEMS: ExpenseItem[] = [
-  {
-    id: 'rent',
-    label: 'office / rent',
-    icon: Home,
-    value: '5,000',
-    iconBg: AMBER_SCALE[5],
-  },
-  {
-    id: 'ads',
-    label: 'ad spend',
-    icon: Megaphone,
-    value: '5,000',
-    iconBg: RED_SCALE[5],
-  },
-  {
-    id: 'tools',
-    label: 'software & tools',
-    icon: AppWindow,
-    value: '5,000',
-    iconBg: ACCENT_SCALE[5],
-  },
-  {
-    id: 'input',
-    label: 'input',
-    icon: Plus,
-    value: '0',
-    iconBg: GRAY_SCALE[6],
-  },
+export type MonthlyExpenseId = 'rent' | 'ads' | 'tools' | 'input';
+
+export type MonthlyExpenseValues = Record<MonthlyExpenseId, number>;
+
+const EXPENSE_META: Array<{
+  id: MonthlyExpenseId;
+  label: string;
+  icon: LucideIcon;
+  iconBg: string;
+}> = [
+  { id: 'rent', label: 'office / rent', icon: Home, iconBg: AMBER_SCALE[5] },
+  { id: 'ads', label: 'ad spend', icon: Megaphone, iconBg: RED_SCALE[5] },
+  { id: 'tools', label: 'software & tools', icon: AppWindow, iconBg: ACCENT_SCALE[5] },
+  { id: 'input', label: 'input', icon: Plus, iconBg: GRAY_SCALE[6] },
 ];
 
 function maxP50(family: RoleFamily): number {
@@ -78,10 +64,6 @@ function maxP50(family: RoleFamily): number {
     if (band && band.p50 > max) max = band.p50;
   }
   return max;
-}
-
-function monthlyValue(annual: number): string {
-  return Math.round(annual / 12).toLocaleString();
 }
 
 type TeamGroup = { team: SalaryTeam; items: ExpenseItem[] };
@@ -112,7 +94,7 @@ function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
           id: f.key,
           label,
           icon: TEAM_ICON[team],
-          value: monthlyValue(maxP50(f)),
+          value: Math.round(maxP50(f) / 12),
           iconBg: TEAM_ICON_BG[team],
           roleCard: { roleKey: f.key, label, team },
         };
@@ -221,10 +203,16 @@ function StackedTeamGroup({
 function ExpenseRow({
   item,
   draggable,
+  onValueChange,
 }: {
   item: ExpenseItem;
   draggable?: boolean;
+  onValueChange?: (next: number) => void;
 }) {
+  const [localValue, setLocalValue] = useState<number>(item.value);
+  const isControlled = onValueChange !== undefined;
+  const currentValue = isControlled ? item.value : localValue;
+  const handleValueChange = isControlled ? onValueChange : setLocalValue;
   const Icon = item.icon;
   const dnd = useRoleDnd();
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -334,9 +322,9 @@ function ExpenseRow({
         >
           $
         </span>
-        <input
-          type="text"
-          defaultValue={item.value}
+        <MoneyInput
+          value={currentValue}
+          onChange={handleValueChange}
           aria-label={`${item.label} cost`}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
@@ -401,7 +389,15 @@ function SectionHeader({
   );
 }
 
-export function ExpensesSidebar() {
+interface ExpensesSidebarProps {
+  expenseValues: MonthlyExpenseValues;
+  onExpenseChange: (patch: Partial<MonthlyExpenseValues>) => void;
+}
+
+export function ExpensesSidebar({
+  expenseValues,
+  onExpenseChange,
+}: ExpensesSidebarProps) {
   const state = useSalaryCatalog();
   const teamGroups =
     state.status === 'ready'
@@ -410,6 +406,14 @@ export function ExpensesSidebar() {
   const [expensesCollapsed, setExpensesCollapsed] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [activeTeam, setActiveTeam] = useState<SalaryTeam | null>(null);
+
+  const monthlyExpenseItems: ExpenseItem[] = EXPENSE_META.map((m) => ({
+    id: m.id,
+    label: m.label,
+    icon: m.icon,
+    iconBg: m.iconBg,
+    value: expenseValues[m.id],
+  }));
 
   return (
     <aside
@@ -433,8 +437,16 @@ export function ExpensesSidebar() {
       />
       {!expensesCollapsed && (
         <div className="flex flex-col gap-[7px]">
-          {EXPENSE_ITEMS.map((item) => (
-            <ExpenseRow key={item.id} item={item} />
+          {monthlyExpenseItems.map((item) => (
+            <ExpenseRow
+              key={item.id}
+              item={item}
+              onValueChange={(next) =>
+                onExpenseChange({
+                  [item.id as MonthlyExpenseId]: next,
+                } as Partial<MonthlyExpenseValues>)
+              }
+            />
           ))}
         </div>
       )}

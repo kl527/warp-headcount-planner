@@ -2,7 +2,22 @@ import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 
 const AXIS_MONTHS = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const;
 
-export function RunwayCard() {
+interface RunwayCardProps {
+  runwayMonths: number | null;
+}
+
+function fmtRunway(runwayMonths: number | null): {
+  text: string;
+  color: string;
+} {
+  if (runwayMonths === null) return { text: 'Cash flow positive', color: '#008500' };
+  if (runwayMonths <= 0) return { text: '0 Months', color: '#e21200' };
+  if (runwayMonths >= 12) return { text: '12+ Months', color: '#008500' };
+  return { text: `${runwayMonths.toFixed(1)} Months`, color: '#e21200' };
+}
+
+export function RunwayCard({ runwayMonths }: RunwayCardProps) {
+  const { text, color } = fmtRunway(runwayMonths);
   return (
     <div
       style={{
@@ -47,10 +62,10 @@ export function RunwayCard() {
             fontSize: 35,
             lineHeight: '40px',
             fontWeight: 700,
-            color: '#e21200',
+            color,
           }}
         >
-          2.9 Months
+          {text}
         </span>
       </div>
 
