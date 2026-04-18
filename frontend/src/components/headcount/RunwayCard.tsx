@@ -16,6 +16,7 @@ export function RunwayCard() {
         display: 'flex',
         flexDirection: 'column',
         gap: 9,
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
       }}
     >
       <div

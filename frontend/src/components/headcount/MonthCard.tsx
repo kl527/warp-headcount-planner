@@ -10,7 +10,7 @@ export function MonthCard({ monthIndex, hires }: MonthCardProps) {
   return (
     <div
       style={{
-        minHeight: 110,
+        minHeight: 200,
         background: '#fff',
         border: '0.5px solid #f9f9f9',
         borderRadius: RADIUS.lg,
