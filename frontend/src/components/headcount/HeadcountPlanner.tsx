@@ -21,8 +21,9 @@ import { useRoleDnd, type DropResult } from './roleDnd';
 import { type View } from './ViewToggle';
 import { YearCard } from './YearCard';
 
-const HORIZON_MONTHS = 48;
 const HORIZON_YEARS = 4;
+const HORIZON_MONTHS = HORIZON_YEARS * 12;
+const BASE_YEAR = 2026;
 
 function defaultMonthlyExpenses(): MonthlyExpenseValues {
   return {
@@ -127,7 +128,7 @@ function PlannerInner() {
   const [focusedYear, setFocusedYear] = useState<number>(0);
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
 
-  const baseYear = new Date().getFullYear();
+  const baseYear = BASE_YEAR;
 
   const handleYearSelect = useCallback((yearIndex: number) => {
     setFocusedYear(yearIndex);
@@ -377,6 +378,7 @@ function PlannerInner() {
                   <YearCard
                     key={y}
                     yearIndex={y}
+                    year={baseYear + y}
                     balanceUsd={yearlyBalances[y]}
                     assignments={yearAssignments[y]}
                     isDropTarget={drag?.armed && drag.dropTarget === y}

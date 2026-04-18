@@ -5,6 +5,7 @@ import { RolePill, type MonthAssignment } from './RolePill';
 
 interface YearCardProps {
   yearIndex: number;
+  year: number;
   balanceUsd?: number;
   assignments?: MonthAssignment[];
   isDropTarget?: boolean;
@@ -15,6 +16,7 @@ interface YearCardProps {
 
 export function YearCard({
   yearIndex,
+  year,
   balanceUsd,
   assignments,
   isDropTarget,
@@ -30,7 +32,6 @@ export function YearCard({
     return () => onRegister(yearIndex, null);
   }, [yearIndex, onRegister]);
 
-  const year = new Date().getFullYear() + yearIndex;
   const sourceMonth = yearIndex * 12;
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
