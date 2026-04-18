@@ -17,15 +17,20 @@ import { type MonthAssignment } from './RolePill';
 import { RunwayCard } from './RunwayCard';
 import { RoleDndProvider } from './RoleDndProvider';
 import { useRoleDnd, type DropResult } from './roleDnd';
+import { type View } from './ViewToggle';
+import { YearCard } from './YearCard';
 
-const HORIZON_MONTHS = 12;
+const HORIZON_MONTHS = 48;
+const HORIZON_YEARS = 4;
 
-const DEFAULT_MONTHLY_EXPENSES: MonthlyExpenseValues = {
-  rent: 5000,
-  ads: 5000,
-  tools: 5000,
-  input: 0,
-};
+function defaultMonthlyExpenses(): MonthlyExpenseValues {
+  return {
+    rent: 5000,
+    ads: 5000,
+    tools: 5000,
+    custom: [{ id: nanoid(8), label: '', value: 0 }],
+  };
+}
 
 type PlacedRole = { startMonth: number; annualUsd: number };
 
@@ -56,6 +61,7 @@ interface SeriesInput {
 
 interface SeriesResult {
   balances: number[]; // length HORIZON_MONTHS, cash at start of each month
+  endOfMonthBalances: number[]; // length HORIZON_MONTHS, cash at end of each month
   runwayMonths: number | null; // null = never goes to zero within horizon
 }
 
@@ -88,7 +94,11 @@ function computeSeries(input: SeriesInput): SeriesResult {
     }
   }
 
-  return { balances: series.slice(0, HORIZON_MONTHS), runwayMonths };
+  return {
+    balances: series.slice(0, HORIZON_MONTHS),
+    endOfMonthBalances: series.slice(1, HORIZON_MONTHS + 1),
+    runwayMonths,
+  };
 }
 
 export function HeadcountPlanner() {
@@ -107,11 +117,12 @@ function PlannerInner() {
     momGrowthPct: 20,
   });
   const [expenseValues, setExpenseValues] = useState<MonthlyExpenseValues>(
-    DEFAULT_MONTHLY_EXPENSES,
+    defaultMonthlyExpenses,
   );
   const [assignments, setAssignments] = useState<
     Record<number, MonthAssignment[]>
   >({});
+  const [view, setView] = useState<View>('month');
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
 
   const catalogState = useSalaryCatalog();
@@ -122,7 +133,7 @@ function PlannerInner() {
     expenseValues.rent +
     expenseValues.ads +
     expenseValues.tools +
-    expenseValues.input;
+    expenseValues.custom.reduce((sum, c) => sum + c.value, 0);
 
   const placedRoles: PlacedRole[] = [];
   for (const [monthStr, list] of Object.entries(assignments)) {
@@ -135,13 +146,30 @@ function PlannerInner() {
     }
   }
 
-  const { balances: monthlyBalances, runwayMonths } = computeSeries({
-    startingCash: financials.companyBalance,
-    baselineBurn,
-    baseMrr: financials.mrr,
-    momGrowthPct: financials.momGrowthPct,
-    roles: placedRoles,
-  });
+  const { balances: monthlyBalances, endOfMonthBalances, runwayMonths } =
+    computeSeries({
+      startingCash: financials.companyBalance,
+      baselineBurn,
+      baseMrr: financials.mrr,
+      momGrowthPct: financials.momGrowthPct,
+      roles: placedRoles,
+    });
+
+  const yearlyBalances: number[] = [];
+  for (let y = 0; y < HORIZON_YEARS; y++) {
+    yearlyBalances.push(endOfMonthBalances[(y + 1) * 12 - 1]);
+  }
+
+  const yearAssignments: MonthAssignment[][] = Array.from(
+    { length: HORIZON_YEARS },
+    () => [],
+  );
+  for (const [monthStr, list] of Object.entries(assignments)) {
+    const startYear = Math.floor(Number(monthStr) / 12);
+    for (let y = startYear; y < HORIZON_YEARS; y++) {
+      yearAssignments[y].push(...list);
+    }
+  }
 
   const handleFinancialsChange = useCallback(
     (patch: Partial<FinancialInputs>) => {
@@ -157,61 +185,69 @@ function PlannerInner() {
     [],
   );
 
-  const handleDrop = useCallback((result: DropResult) => {
-    const { target, card, source, ghostRect } = result;
+  const handleDrop = useCallback(
+    (result: DropResult) => {
+      const { target, card, source, ghostRect } = result;
 
-    // Sidebar → month: add a fresh pill that FLIPs in from the cursor.
-    if (source.kind === 'sidebar') {
-      if (target === null) return;
-      const entry: MonthAssignment = {
-        id: nanoid(8),
-        roleKey: card.roleKey,
-        label: card.label,
-        team: card.team,
-        flipFrom: ghostRect,
-      };
+      // In yearly view the `target` index is a year (0..HORIZON_YEARS-1).
+      // Translate it to the first month of that year for storage.
+      const targetMonth =
+        target === null ? null : view === 'year' ? target * 12 : target;
+
+      // Sidebar → month: add a fresh pill that FLIPs in from the cursor.
+      if (source.kind === 'sidebar') {
+        if (targetMonth === null) return;
+        const entry: MonthAssignment = {
+          id: nanoid(8),
+          roleKey: card.roleKey,
+          label: card.label,
+          team: card.team,
+          flipFrom: ghostRect,
+        };
+        setAssignments((prev) => {
+          const cur = prev[targetMonth] ?? [];
+          return { ...prev, [targetMonth]: [...cur, entry] };
+        });
+        return;
+      }
+
+      // source.kind === 'month'
+      const fromMonth = source.monthIndex;
+      const fromId = source.assignmentId;
+
+      if (targetMonth === null) {
+        setAssignments((prev) => {
+          const cur = prev[fromMonth];
+          if (!cur) return prev;
+          return {
+            ...prev,
+            [fromMonth]: cur.filter((a) => a.id !== fromId),
+          };
+        });
+        return;
+      }
+
+      // In year view, dropping back onto the same year is a no-op.
+      const sameSlot =
+        view === 'year'
+          ? Math.floor(fromMonth / 12) === Math.floor(targetMonth / 12)
+          : targetMonth === fromMonth;
+      if (sameSlot) return;
+
       setAssignments((prev) => {
-        const cur = prev[target] ?? [];
-        return { ...prev, [target]: [...cur, entry] };
-      });
-      return;
-    }
-
-    // source.kind === 'month'
-    const fromMonth = source.monthIndex;
-    const fromId = source.assignmentId;
-
-    if (target === null) {
-      // Dropped outside any month → delete.
-      setAssignments((prev) => {
-        const cur = prev[fromMonth];
-        if (!cur) return prev;
+        const src = prev[fromMonth] ?? [];
+        const moving = src.find((a) => a.id === fromId);
+        if (!moving) return prev;
+        const dst = prev[targetMonth] ?? [];
         return {
           ...prev,
-          [fromMonth]: cur.filter((a) => a.id !== fromId),
+          [fromMonth]: src.filter((a) => a.id !== fromId),
+          [targetMonth]: [...dst, { ...moving, flipFrom: ghostRect }],
         };
       });
-      return;
-    }
-
-    if (target === fromMonth) {
-      // Same month → noop; the ghost fades and the pill reveals itself.
-      return;
-    }
-
-    // Move across months: remove from source, append to target w/ FLIP.
-    setAssignments((prev) => {
-      const src = prev[fromMonth] ?? [];
-      const moving = src.find((a) => a.id === fromId);
-      if (!moving) return prev;
-      const dst = prev[target] ?? [];
-      return {
-        ...prev,
-        [fromMonth]: src.filter((a) => a.id !== fromId),
-        [target]: [...dst, { ...moving, flipFrom: ghostRect }],
-      };
-    });
-  }, []);
+    },
+    [view],
+  );
 
   const handleFlipDone = useCallback((assignmentId: string) => {
     setAssignments((prev) => {
@@ -282,28 +318,47 @@ function PlannerInner() {
         <FinancialInputsRow
           values={financials}
           onChange={handleFinancialsChange}
+          view={view}
+          onViewChange={setView}
         />
 
         <section className="mt-[16px] flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
           <ExpensesSidebar
             expenseValues={expenseValues}
             onExpenseChange={handleExpenseChange}
+            view={view}
           />
 
           <div className="flex-1 min-w-0">
-            <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
-              {Array.from({ length: 12 }).map((_, idx) => (
-                <MonthCard
-                  key={idx}
-                  monthIndex={idx}
-                  balanceUsd={monthlyBalances[idx]}
-                  assignments={assignments[idx]}
-                  isDropTarget={drag?.armed && drag.dropTarget === idx}
-                  onRegister={registerMonth}
-                  onFlipDone={handleFlipDone}
-                />
-              ))}
-            </div>
+            {view === 'month' ? (
+              <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
+                {Array.from({ length: 12 }).map((_, idx) => (
+                  <MonthCard
+                    key={idx}
+                    monthIndex={idx}
+                    balanceUsd={monthlyBalances[idx]}
+                    assignments={assignments[idx]}
+                    isDropTarget={drag?.armed && drag.dropTarget === idx}
+                    onRegister={registerMonth}
+                    onFlipDone={handleFlipDone}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-[14px]">
+                {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
+                  <YearCard
+                    key={y}
+                    yearIndex={y}
+                    balanceUsd={yearlyBalances[y]}
+                    assignments={yearAssignments[y]}
+                    isDropTarget={drag?.armed && drag.dropTarget === y}
+                    onRegister={registerMonth}
+                    onFlipDone={handleFlipDone}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>

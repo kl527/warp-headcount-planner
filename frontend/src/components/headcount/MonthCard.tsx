@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { MONTH_LABELS } from '../../data/headcount';
+import { AnimatedBalance } from './balance';
 import { RolePill, type MonthAssignment } from './RolePill';
 
 interface MonthCardProps {
@@ -10,14 +11,6 @@ interface MonthCardProps {
   isDropTarget?: boolean;
   onRegister?: (index: number, el: HTMLElement | null) => void;
   onFlipDone?: (assignmentId: string) => void;
-}
-
-function fmtBalance(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n <= -1_000_000) return `-$${(-n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
-  if (n <= -1_000) return `-$${Math.round(-n / 1_000)}K`;
-  return `$${Math.round(n)}`;
 }
 
 export function MonthCard({
@@ -101,18 +94,19 @@ export function MonthCard({
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: '#f5fcf3',
+              background: balanceUsd < 0 ? '#fcf3f3' : '#f5fcf3',
               borderRadius: 20,
               height: 30,
               padding: '0 14px',
               fontFamily: FONT_FAMILIES.sans,
               fontSize: 12,
               fontWeight: 600,
-              color: '#008500',
+              color: balanceUsd < 0 ? '#850000' : '#008500',
               whiteSpace: 'nowrap',
+              transition: 'background 180ms ease, color 180ms ease',
             }}
           >
-            {fmtBalance(balanceUsd)}
+            <AnimatedBalance value={balanceUsd} />
           </span>
         </div>
       )}

@@ -6,7 +6,8 @@ import {
   Plus,
   type LucideIcon,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { nanoid } from 'nanoid';
+import { Children, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ACCENT_SCALE,
   AMBER_SCALE,
@@ -30,6 +31,7 @@ import {
 } from '../../lib/salaryApi';
 import { MoneyInput } from './MoneyInput';
 import { useRoleDnd, type RoleCard } from './roleDnd';
+import { type View } from './ViewToggle';
 
 const SECTION_BLACK = '#000';
 
@@ -42,12 +44,23 @@ type ExpenseItem = {
   roleCard?: RoleCard;
 };
 
-export type MonthlyExpenseId = 'rent' | 'ads' | 'tools' | 'input';
+export type FixedExpenseId = 'rent' | 'ads' | 'tools';
 
-export type MonthlyExpenseValues = Record<MonthlyExpenseId, number>;
+export type CustomExpense = {
+  id: string;
+  label: string;
+  value: number;
+};
 
-const EXPENSE_META: Array<{
-  id: MonthlyExpenseId;
+export type MonthlyExpenseValues = {
+  rent: number;
+  ads: number;
+  tools: number;
+  custom: CustomExpense[];
+};
+
+const FIXED_EXPENSE_META: Array<{
+  id: FixedExpenseId;
   label: string;
   icon: LucideIcon;
   iconBg: string;
@@ -55,8 +68,9 @@ const EXPENSE_META: Array<{
   { id: 'rent', label: 'office / rent', icon: Home, iconBg: AMBER_SCALE[5] },
   { id: 'ads', label: 'ad spend', icon: Megaphone, iconBg: RED_SCALE[5] },
   { id: 'tools', label: 'software & tools', icon: AppWindow, iconBg: ACCENT_SCALE[5] },
-  { id: 'input', label: 'input', icon: Plus, iconBg: GRAY_SCALE[6] },
 ];
+
+const CUSTOM_ICON_BG = GRAY_SCALE[6];
 
 function maxP50(family: RoleFamily): number {
   let max = 0;
@@ -68,7 +82,10 @@ function maxP50(family: RoleFamily): number {
 
 type TeamGroup = { team: SalaryTeam; items: ExpenseItem[] };
 
-function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
+function familiesToTeamGroups(
+  families: RoleFamily[],
+  view: View,
+): TeamGroup[] {
   const byTeam = new Map<SalaryTeam, RoleFamily[]>();
   for (const f of families) {
     if (!TEAM_FEATURED_ROLES[f.team].has(f.key)) continue;
@@ -90,11 +107,12 @@ function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
       team,
       items: sorted.map((f) => {
         const label = ROLE_SHORT_LABEL[f.key] ?? f.displayName;
+        const annual = maxP50(f);
         return {
           id: f.key,
           label,
           icon: TEAM_ICON[team],
-          value: Math.round(maxP50(f) / 12),
+          value: view === 'year' ? annual : Math.round(annual / 12),
           iconBg: TEAM_ICON_BG[team],
           roleCard: { roleKey: f.key, label, team },
         };
@@ -204,21 +222,39 @@ function ExpenseRow({
   item,
   draggable,
   onValueChange,
+  onLabelChange,
+  labelPlaceholder,
+  valueMultiplier = 1,
 }: {
   item: ExpenseItem;
   draggable?: boolean;
   onValueChange?: (next: number) => void;
+  onLabelChange?: (next: string) => void;
+  labelPlaceholder?: string;
+  valueMultiplier?: number;
 }) {
   const [localValue, setLocalValue] = useState<number>(item.value);
+  const [syncedFrom, setSyncedFrom] = useState<number>(item.value);
   const isControlled = onValueChange !== undefined;
-  const currentValue = isControlled ? item.value : localValue;
-  const handleValueChange = isControlled ? onValueChange : setLocalValue;
+  if (!isControlled && item.value !== syncedFrom) {
+    setLocalValue(item.value);
+    setSyncedFrom(item.value);
+  }
+  const storedValue = isControlled ? item.value : localValue;
+  const currentValue = storedValue * valueMultiplier;
+  const handleValueChange = (next: number) => {
+    const normalized =
+      valueMultiplier === 1 ? next : Math.round(next / valueMultiplier);
+    if (isControlled) onValueChange(normalized);
+    else setLocalValue(normalized);
+  };
   const Icon = item.icon;
   const dnd = useRoleDnd();
   const rowRef = useRef<HTMLDivElement | null>(null);
   const suppressClick = useRef(false);
 
   const canDrag = Boolean(draggable && item.roleCard);
+  const labelEditable = onLabelChange !== undefined;
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!canDrag || !item.roleCard) return;
@@ -290,16 +326,39 @@ function ExpenseRow({
       >
         <Icon size={14} />
       </div>
-      <span
-        className="flex-1 truncate"
-        style={{
-          fontFamily: FONT_FAMILIES.sans,
-          fontSize: 12,
-          color: '#000',
-        }}
-      >
-        {item.label}
-      </span>
+      {labelEditable ? (
+        <input
+          type="text"
+          value={item.label}
+          placeholder={labelPlaceholder}
+          onChange={(e) => onLabelChange(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 truncate"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: 0,
+            fontFamily: FONT_FAMILIES.sans,
+            fontSize: 12,
+            color: '#000',
+          }}
+        />
+      ) : (
+        <span
+          className="flex-1 truncate"
+          style={{
+            fontFamily: FONT_FAMILIES.sans,
+            fontSize: 12,
+            color: '#000',
+          }}
+        >
+          {item.label}
+        </span>
+      )}
       <div
         className="flex items-center"
         style={{
@@ -389,25 +448,197 @@ function SectionHeader({
   );
 }
 
+const STAGGER_MS = 30;
+const ITEM_DURATION_MS = 160;
+const CONTAINER_DURATION_MS = 260;
+const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+function StaggeredCollapse({
+  collapsed,
+  gap,
+  children,
+}: {
+  collapsed: boolean;
+  gap: number;
+  children: ReactNode;
+}) {
+  const items = Children.toArray(children);
+  const count = items.length;
+  const [mounted, setMounted] = useState(!collapsed);
+  const [visible, setVisible] = useState(!collapsed);
+
+  useEffect(() => {
+    if (collapsed) {
+      setVisible(false);
+      const t = window.setTimeout(
+        () => setMounted(false),
+        CONTAINER_DURATION_MS + 20,
+      );
+      return () => window.clearTimeout(t);
+    }
+    setMounted(true);
+    const raf = window.requestAnimationFrame(() => setVisible(true));
+    return () => window.cancelAnimationFrame(raf);
+  }, [collapsed]);
+
+  if (!mounted) return null;
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateRows: visible ? '1fr' : '0fr',
+        transition: `grid-template-rows ${CONTAINER_DURATION_MS}ms ${EASE_OUT}`,
+      }}
+    >
+      <div style={{ overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap }}>
+          {items.map((child, i) => {
+            const collapseDelay = (count - 1 - i) * STAGGER_MS;
+            const expandDelay = i * STAGGER_MS;
+            const delay = visible ? expandDelay : collapseDelay;
+            return (
+              <div
+                key={i}
+                style={{
+                  transform: visible ? 'translateY(0)' : 'translateY(-14px)',
+                  opacity: visible ? 1 : 0,
+                  transition: `transform ${ITEM_DURATION_MS}ms ${EASE_OUT} ${delay}ms, opacity ${ITEM_DURATION_MS}ms ${EASE_OUT} ${delay}ms`,
+                  willChange: 'transform, opacity',
+                }}
+              >
+                {child}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const CUSTOM_ROW_GAP = 7;
+const CUSTOM_ENTER_MS = 280;
+
+function AnimatedCustomRow({
+  initial,
+  gapTop,
+  children,
+}: {
+  initial: boolean;
+  gapTop: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(initial);
+
+  useEffect(() => {
+    if (initial) return;
+    const raf = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(raf);
+  }, [initial]);
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        paddingTop: open && gapTop ? CUSTOM_ROW_GAP : 0,
+        opacity: open ? 1 : 0,
+        transition: `grid-template-rows ${CUSTOM_ENTER_MS}ms ${EASE_OUT}, padding-top ${CUSTOM_ENTER_MS}ms ${EASE_OUT}, opacity ${CUSTOM_ENTER_MS}ms ${EASE_OUT}`,
+      }}
+    >
+      <div style={{ overflow: 'hidden', minHeight: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function CustomExpenseList({
+  custom,
+  onChange,
+  valueMultiplier = 1,
+}: {
+  custom: CustomExpense[];
+  onChange: (next: CustomExpense[]) => void;
+  valueMultiplier?: number;
+}) {
+  const [initialIds] = useState<Set<string>>(
+    () => new Set(custom.map((c) => c.id)),
+  );
+
+  const ensureTrailingDraft = (list: CustomExpense[]): CustomExpense[] => {
+    const last = list[list.length - 1];
+    if (!last || last.label.trim() !== '' || last.value !== 0) {
+      return [...list, { id: nanoid(8), label: '', value: 0 }];
+    }
+    return list;
+  };
+
+  const handleLabelChange = (id: string, label: string) => {
+    onChange(
+      ensureTrailingDraft(
+        custom.map((c) => (c.id === id ? { ...c, label } : c)),
+      ),
+    );
+  };
+
+  const handleValueChange = (id: string, value: number) => {
+    onChange(
+      ensureTrailingDraft(
+        custom.map((c) => (c.id === id ? { ...c, value } : c)),
+      ),
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {custom.map((c, i) => {
+        const isInitial = initialIds.has(c.id);
+        const isLast = i === custom.length - 1;
+        const item: ExpenseItem = {
+          id: c.id,
+          label: c.label,
+          icon: Plus,
+          iconBg: CUSTOM_ICON_BG,
+          value: c.value,
+        };
+        return (
+          <AnimatedCustomRow key={c.id} initial={isInitial} gapTop={i > 0}>
+            <ExpenseRow
+              item={item}
+              onLabelChange={(next) => handleLabelChange(c.id, next)}
+              onValueChange={(next) => handleValueChange(c.id, next)}
+              labelPlaceholder={isLast ? 'input' : ''}
+              valueMultiplier={valueMultiplier}
+            />
+          </AnimatedCustomRow>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ExpensesSidebarProps {
   expenseValues: MonthlyExpenseValues;
   onExpenseChange: (patch: Partial<MonthlyExpenseValues>) => void;
+  view: View;
 }
 
 export function ExpensesSidebar({
   expenseValues,
   onExpenseChange,
+  view,
 }: ExpensesSidebarProps) {
   const state = useSalaryCatalog();
   const teamGroups =
     state.status === 'ready'
-      ? familiesToTeamGroups(state.catalog.families)
+      ? familiesToTeamGroups(state.catalog.families, view)
       : [];
+  const valueMultiplier = view === 'year' ? 12 : 1;
   const [expensesCollapsed, setExpensesCollapsed] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
   const [activeTeam, setActiveTeam] = useState<SalaryTeam | null>(null);
 
-  const monthlyExpenseItems: ExpenseItem[] = EXPENSE_META.map((m) => ({
+  const fixedExpenseItems: ExpenseItem[] = FIXED_EXPENSE_META.map((m) => ({
     id: m.id,
     label: m.label,
     icon: m.icon,
@@ -431,50 +662,52 @@ export function ExpensesSidebar({
       }}
     >
       <SectionHeader
-        title="Monthly Expenses"
+        title={view === 'year' ? 'Yearly Expenses' : 'Monthly Expenses'}
         collapsed={expensesCollapsed}
         onToggle={() => setExpensesCollapsed((v) => !v)}
       />
-      {!expensesCollapsed && (
-        <div className="flex flex-col gap-[7px]">
-          {monthlyExpenseItems.map((item) => (
-            <ExpenseRow
-              key={item.id}
-              item={item}
-              onValueChange={(next) =>
-                onExpenseChange({
-                  [item.id as MonthlyExpenseId]: next,
-                } as Partial<MonthlyExpenseValues>)
-              }
-            />
-          ))}
-        </div>
-      )}
+      <StaggeredCollapse collapsed={expensesCollapsed} gap={7}>
+        {fixedExpenseItems.map((item) => (
+          <ExpenseRow
+            key={item.id}
+            item={item}
+            valueMultiplier={valueMultiplier}
+            onValueChange={(next) =>
+              onExpenseChange({
+                [item.id as FixedExpenseId]: next,
+              } as Partial<MonthlyExpenseValues>)
+            }
+          />
+        ))}
+        <CustomExpenseList
+          custom={expenseValues.custom}
+          onChange={(next) => onExpenseChange({ custom: next })}
+          valueMultiplier={valueMultiplier}
+        />
+      </StaggeredCollapse>
       <SectionHeader
         title="Team"
         collapsed={teamCollapsed}
         onToggle={() => setTeamCollapsed((v) => !v)}
       />
-      {!teamCollapsed && (
-        <div className="flex flex-col gap-[14px]">
-          {teamGroups.map((g) => (
-            <StackedTeamGroup
-              key={g.team}
-              items={g.items}
-              expanded={activeTeam === g.team}
-              onToggle={() =>
-                setActiveTeam((cur) => (cur === g.team ? null : g.team))
-              }
-              onSetExpanded={(next) =>
-                setActiveTeam((cur) => {
-                  if (next) return g.team;
-                  return cur === g.team ? null : cur;
-                })
-              }
-            />
-          ))}
-        </div>
-      )}
+      <StaggeredCollapse collapsed={teamCollapsed} gap={14}>
+        {teamGroups.map((g) => (
+          <StackedTeamGroup
+            key={g.team}
+            items={g.items}
+            expanded={activeTeam === g.team}
+            onToggle={() =>
+              setActiveTeam((cur) => (cur === g.team ? null : g.team))
+            }
+            onSetExpanded={(next) =>
+              setActiveTeam((cur) => {
+                if (next) return g.team;
+                return cur === g.team ? null : cur;
+              })
+            }
+          />
+        ))}
+      </StaggeredCollapse>
     </aside>
   );
 }

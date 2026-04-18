@@ -1,5 +1,6 @@
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { MoneyInput } from './MoneyInput';
+import { ViewToggle, type View } from './ViewToggle';
 
 function LabeledMoneyInput({
   label,
@@ -13,11 +14,11 @@ function LabeledMoneyInput({
   onChange: (next: number) => void;
 }) {
   return (
-    <label className="flex flex-col gap-[9px] min-w-0">
+    <label className="flex flex-col gap-[7px] min-w-0">
       <span
         style={{
           fontFamily: FONT_FAMILIES.sans,
-          fontSize: 15,
+          fontSize: 13,
           fontWeight: 500,
           color: '#000',
         }}
@@ -28,19 +29,19 @@ function LabeledMoneyInput({
         className="flex items-center"
         style={{
           width: '100%',
-          maxWidth: 260,
-          height: 32,
+          maxWidth: 180,
+          height: 28,
           border: '0.5px solid rgba(0, 0, 0, 0.3)',
           borderRadius: RADIUS.lg,
-          padding: '0 14px',
+          padding: '0 12px',
           background: '#fff',
-          gap: 10,
+          gap: 8,
         }}
       >
         <span
           style={{
             fontFamily: FONT_FAMILIES.sans,
-            fontSize: 12,
+            fontSize: 11,
             color: '#aeaeae',
           }}
         >
@@ -56,7 +57,7 @@ function LabeledMoneyInput({
             border: 'none',
             outline: 'none',
             fontFamily: FONT_FAMILIES.mono,
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 500,
             color: '#1e1e1e',
             fontVariantNumeric: 'tabular-nums',
@@ -76,11 +77,38 @@ export interface FinancialInputs {
 interface FinancialInputsRowProps {
   values: FinancialInputs;
   onChange: (patch: Partial<FinancialInputs>) => void;
+  view: View;
+  onViewChange: (next: View) => void;
 }
 
-export function FinancialInputsRow({ values, onChange }: FinancialInputsRowProps) {
+export function FinancialInputsRow({
+  values,
+  onChange,
+  view,
+  onViewChange,
+}: FinancialInputsRowProps) {
+  const isYear = view === 'year';
+
+  const revenueLabel = isYear ? 'ARR' : 'MRR';
+  const revenueValue = isYear ? values.mrr * 12 : values.mrr;
+  const onRevenueChange = (next: number) =>
+    onChange({ mrr: isYear ? Math.round(next / 12) : next });
+
+  const growthLabel = isYear ? 'YoY Growth' : 'MoM Growth';
+  const growthValue = isYear
+    ? Math.round(
+        (Math.pow(1 + values.momGrowthPct / 100, 12) - 1) * 100,
+      )
+    : values.momGrowthPct;
+  const onGrowthChange = (next: number) =>
+    onChange({
+      momGrowthPct: isYear
+        ? Math.round((Math.pow(1 + next / 100, 1 / 12) - 1) * 10000) / 100
+        : next,
+    });
+
   return (
-    <div className="grid grid-cols-1 tablet:grid-cols-3 gap-[16px] tablet:gap-[14px] laptop:gap-[30px]">
+    <div className="flex flex-col tablet:flex-row tablet:items-end gap-[16px] tablet:gap-[14px] laptop:gap-[30px]">
       <LabeledMoneyInput
         label="Company Balance"
         value={values.companyBalance}
@@ -88,17 +116,20 @@ export function FinancialInputsRow({ values, onChange }: FinancialInputsRowProps
         onChange={(next) => onChange({ companyBalance: next })}
       />
       <LabeledMoneyInput
-        label="MRR"
-        value={values.mrr}
+        label={revenueLabel}
+        value={revenueValue}
         prefix="$"
-        onChange={(next) => onChange({ mrr: next })}
+        onChange={onRevenueChange}
       />
       <LabeledMoneyInput
-        label="MoM Growth"
-        value={values.momGrowthPct}
+        label={growthLabel}
+        value={growthValue}
         prefix="%"
-        onChange={(next) => onChange({ momGrowthPct: next })}
+        onChange={onGrowthChange}
       />
+      <div className="tablet:ml-auto flex-shrink-0">
+        <ViewToggle value={view} onChange={onViewChange} />
+      </div>
     </div>
   );
 }

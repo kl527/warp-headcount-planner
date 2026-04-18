@@ -199,6 +199,23 @@ button {
   --radius: 0.5rem;
 }
 
+@keyframes money-exit-up {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-110%); opacity: 0; }
+}
+@keyframes money-enter-up {
+  from { transform: translateY(110%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes money-exit-down {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(110%); opacity: 0; }
+}
+@keyframes money-enter-down {
+  from { transform: translateY(-110%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
