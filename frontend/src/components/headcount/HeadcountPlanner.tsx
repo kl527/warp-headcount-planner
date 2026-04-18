@@ -1,237 +1,85 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  BRAND_CTA,
-  FONT_FAMILIES,
-  HEADER,
-  HEADING_SPECS,
-  PAGE_WIDTH,
-  RADIUS,
-} from '../../constants/design';
+import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
 import {
   HIRES,
   PLAN_YEAR,
+  hiresForMonth,
   hiresForYear,
   monthKey,
 } from '../../data/headcount';
-import { StatRow } from './StatRow';
-import { ViewToggle, type View } from './ViewToggle';
-import { YearlyView } from './YearlyView';
-import { MonthlyView } from './MonthlyView';
+import { DropZone } from './DropZone';
+import { ExpensesSidebar } from './ExpensesSidebar';
+import { FinancialInputsRow } from './FinancialInputsRow';
+import { MonthCard } from './MonthCard';
+import { RunwayCard } from './RunwayCard';
 
 export function HeadcountPlanner() {
-  const [year, setYear] = useState(PLAN_YEAR);
-  const [view, setView] = useState<View>('year');
-  const [focusedMonth, setFocusedMonth] = useState<string>(
-    monthKey(PLAN_YEAR, new Date().getMonth()),
-  );
-
-  const yearHires = hiresForYear(HIRES, year);
-
-  const goToMonth = (key: string) => {
-    setFocusedMonth(key);
-    setView('month');
-  };
-
-  const shiftMonth = (delta: number) => {
-    const [, m] = focusedMonth.split('-');
-    const idx = Number(m) - 1 + delta;
-    let nextYear = year;
-    let nextIdx = idx;
-    if (idx < 0) {
-      nextYear = year - 1;
-      nextIdx = 11;
-    } else if (idx > 11) {
-      nextYear = year + 1;
-      nextIdx = 0;
-    }
-    setYear(nextYear);
-    setFocusedMonth(monthKey(nextYear, nextIdx));
-  };
+  const yearHires = hiresForYear(HIRES, PLAN_YEAR);
 
   return (
-    <div className="flex flex-col min-h-svh">
-      <TopBar />
-      <SubNav
-        year={year}
-        view={view}
-        onPrevYear={() => setYear(year - 1)}
-        onNextYear={() => setYear(year + 1)}
-        onChangeView={setView}
-      />
-
+    <div className="min-h-svh">
       <main
-        className="mx-auto w-full px-[24px] tablet:px-[32px] laptop:px-[48px] py-[24px] laptop:py-[32px] flex flex-col gap-[24px]"
-        style={{ maxWidth: PAGE_WIDTH.max }}
-      >
-        <header className="flex flex-col gap-[4px]">
-          <h2
-            style={{
-              fontFamily: HEADING_SPECS.h2LedeBold.font,
-              fontSize: 28,
-              lineHeight: '34px',
-              fontWeight: 700,
-              letterSpacing: '-0.018em',
-              margin: 0,
-              color: HEADING_SPECS.h2LedeBold.color,
-            }}
-          >
-            Headcount plan
-          </h2>
-        </header>
-
-        <StatRow hires={yearHires} />
-
-        {view === 'year' ? (
-          <YearlyView year={year} onMonthClick={goToMonth} />
-        ) : (
-          <MonthlyView
-            hires={yearHires}
-            focusedMonthKey={focusedMonth}
-            year={year}
-            onPrev={() => shiftMonth(-1)}
-            onNext={() => shiftMonth(1)}
-            onBack={() => setView('year')}
-          />
-        )}
-      </main>
-    </div>
-  );
-}
-
-function TopBar() {
-  return (
-    <div
-      className="sticky top-0 z-20 flex items-center justify-between px-[24px] tablet:px-[32px] laptop:px-[48px]"
-      style={{
-        height: HEADER.height,
-        background: HEADER.background,
-        backdropFilter: 'saturate(180%) blur(12px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(12px)',
-        boxShadow: 'inset 0 -1px 0 rgba(0, 0, 0, 0.09)',
-      }}
-    >
-      <div className="flex items-center gap-[12px]">
-        <BrandMark />
-        <span
-          style={{
-            fontFamily: FONT_FAMILIES.brand,
-            fontSize: 15,
-            lineHeight: '20px',
-            fontWeight: 500,
-            color: 'var(--color-gray-12)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Headcount
-        </span>
-        <span
-          style={{
-            fontFamily: FONT_FAMILIES.mono,
-            fontSize: 12,
-            lineHeight: '16px',
-            color: 'var(--color-gray-9)',
-            letterSpacing: '0.04em',
-            padding: '2px 8px',
-            borderRadius: RADIUS.md,
-            boxShadow: 'inset 0 0 0 1px #00000014',
-          }}
-        >
-          PLAN
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SubNav({
-  year,
-  view,
-  onPrevYear,
-  onNextYear,
-  onChangeView,
-}: {
-  year: number;
-  view: View;
-  onPrevYear: () => void;
-  onNextYear: () => void;
-  onChangeView: (v: View) => void;
-}) {
-  return (
-    <div
-      className="sticky z-10 flex items-center justify-between px-[24px] tablet:px-[32px] laptop:px-[48px]"
-      style={{
-        top: HEADER.height,
-        height: 52,
-        background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'saturate(180%) blur(10px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(10px)',
-        boxShadow: 'inset 0 -1px 0 rgba(0, 0, 0, 0.06)',
-      }}
-    >
-      <div
-        className="flex items-center gap-[4px]"
+        className="mx-auto w-full py-[48px] laptop:py-[64px] flex flex-col gap-[20px]"
         style={{
-          fontFamily: FONT_FAMILIES.brand,
-          fontSize: 14,
-          lineHeight: '20px',
-          fontWeight: 500,
-          color: 'var(--color-gray-12)',
+          maxWidth: PAGE_WIDTH.max,
+          paddingInline: 'clamp(16px, calc((100vw - 1040px) / 2), 120px)',
         }}
       >
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onPrevYear}
-          aria-label="Previous year"
-        >
-          <ChevronLeft />
-        </Button>
-        <span
-          style={{
-            fontVariantNumeric: 'tabular-nums',
-            minWidth: 48,
-            textAlign: 'center',
-          }}
-        >
-          {year}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onNextYear}
-          aria-label="Next year"
-        >
-          <ChevronRight />
-        </Button>
-      </div>
-      <div className="flex items-center gap-[10px]">
-        <ViewToggle value={view} onChange={onChangeView} />
-      </div>
-    </div>
-  );
-}
+        <section className="flex flex-col tablet:flex-row gap-[32px] items-stretch mb-[28px]">
+          <div className="flex flex-col justify-between gap-[36px] flex-1 min-w-0 w-full">
+            <header className="flex flex-col gap-[18px]">
+              <h1
+                style={{
+                  fontFamily: FONT_FAMILIES.sans,
+                  fontSize: 48,
+                  lineHeight: '57.6px',
+                  fontWeight: 500,
+                  color: '#202020',
+                  margin: 0,
+                }}
+              >
+                Understand your{' '}
+                <span style={{ fontWeight: 700 }}>Runway</span>
+              </h1>
+              <p
+                style={{
+                  fontFamily: FONT_FAMILIES.sans,
+                  fontSize: 18,
+                  lineHeight: '27px',
+                  color: 'rgba(0, 0, 0, 0.61)',
+                  maxWidth: 489,
+                  margin: 0,
+                }}
+              >
+                drag &amp; drop your excel sheet or type in your company
+                financials and we&rsquo;ll give you an accurate runway
+              </p>
+            </header>
+            <DropZone />
+          </div>
 
-function BrandMark() {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex items-center justify-center"
-      style={{
-        width: 26,
-        height: 26,
-        borderRadius: 7,
-        background: BRAND_CTA.bg,
-        color: BRAND_CTA.fg,
-        fontFamily: FONT_FAMILIES.brand,
-        fontSize: 14,
-        lineHeight: 1,
-        fontWeight: 600,
-        letterSpacing: '-0.03em',
-      }}
-    >
-      w
-    </span>
+          <div className="w-full tablet:w-[340px] laptop:w-[400px] xl:w-[466px] tablet:flex-shrink-0">
+            <RunwayCard />
+          </div>
+        </section>
+
+        <FinancialInputsRow />
+
+        <section className="flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
+          <ExpensesSidebar />
+
+          <div className="flex-1 min-w-0">
+            <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
+              {Array.from({ length: 12 }).map((_, idx) => (
+                <MonthCard
+                  key={idx}
+                  monthIndex={idx}
+                  hires={hiresForMonth(yearHires, monthKey(PLAN_YEAR, idx))}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

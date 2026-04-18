@@ -1,5 +1,10 @@
 import { RADIUS, SHADOWS } from '../../constants/design';
-import { monthKey } from '../../data/headcount';
+import {
+  HIRES,
+  hiresForMonth,
+  hiresForYear,
+  monthKey,
+} from '../../data/headcount';
 import { MonthCard } from './MonthCard';
 
 interface YearlyViewProps {
@@ -8,6 +13,7 @@ interface YearlyViewProps {
 }
 
 export function YearlyView({ year, onMonthClick }: YearlyViewProps) {
+  const yearHires = hiresForYear(HIRES, year);
   return (
     <div
       className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 xl:grid-cols-4 gap-px overflow-hidden"
@@ -20,11 +26,14 @@ export function YearlyView({ year, onMonthClick }: YearlyViewProps) {
       {Array.from({ length: 12 }).map((_, i) => {
         const key = monthKey(year, i);
         return (
-          <MonthCard
+          <button
             key={key}
-            monthIndex={i}
+            type="button"
             onClick={() => onMonthClick(key)}
-          />
+            className="text-left cursor-pointer"
+          >
+            <MonthCard monthIndex={i} hires={hiresForMonth(yearHires, key)} />
+          </button>
         );
       })}
     </div>
