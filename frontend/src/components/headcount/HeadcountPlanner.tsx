@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useState } from 'react';
 import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
@@ -123,7 +124,19 @@ function PlannerInner() {
     Record<number, MonthAssignment[]>
   >({});
   const [view, setView] = useState<View>('month');
+  const [focusedYear, setFocusedYear] = useState<number>(0);
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
+
+  const baseYear = new Date().getFullYear();
+
+  const handleYearSelect = useCallback((yearIndex: number) => {
+    setFocusedYear(yearIndex);
+    setView('month');
+  }, []);
+
+  const stepYear = (delta: number) => {
+    setFocusedYear((y) => Math.min(HORIZON_YEARS - 1, Math.max(0, y + delta)));
+  };
 
   const catalogState = useSalaryCatalog();
   const families =
@@ -329,21 +342,35 @@ function PlannerInner() {
             view={view}
           />
 
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col gap-[14px]">
             {view === 'month' ? (
-              <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
-                {Array.from({ length: 12 }).map((_, idx) => (
-                  <MonthCard
-                    key={idx}
-                    monthIndex={idx}
-                    balanceUsd={monthlyBalances[idx]}
-                    assignments={assignments[idx]}
-                    isDropTarget={drag?.armed && drag.dropTarget === idx}
-                    onRegister={registerMonth}
-                    onFlipDone={handleFlipDone}
-                  />
-                ))}
-              </div>
+              <>
+                <YearStepper
+                  year={baseYear + focusedYear}
+                  canPrev={focusedYear > 0}
+                  canNext={focusedYear < HORIZON_YEARS - 1}
+                  onPrev={() => stepYear(-1)}
+                  onNext={() => stepYear(1)}
+                />
+                <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
+                  {Array.from({ length: 12 }).map((_, idx) => {
+                    const monthIndex = focusedYear * 12 + idx;
+                    return (
+                      <MonthCard
+                        key={monthIndex}
+                        monthIndex={monthIndex}
+                        balanceUsd={monthlyBalances[monthIndex]}
+                        assignments={assignments[monthIndex]}
+                        isDropTarget={
+                          drag?.armed && drag.dropTarget === monthIndex
+                        }
+                        onRegister={registerMonth}
+                        onFlipDone={handleFlipDone}
+                      />
+                    );
+                  })}
+                </div>
+              </>
             ) : (
               <div className="flex flex-col gap-[14px]">
                 {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
@@ -355,6 +382,7 @@ function PlannerInner() {
                     isDropTarget={drag?.armed && drag.dropTarget === y}
                     onRegister={registerMonth}
                     onFlipDone={handleFlipDone}
+                    onSelect={handleYearSelect}
                   />
                 ))}
               </div>
@@ -362,6 +390,82 @@ function PlannerInner() {
           </div>
         </section>
       </main>
+    </div>
+  );
+}
+
+function YearStepper({
+  year,
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+}: {
+  year: number;
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const btn: React.CSSProperties = {
+    width: 28,
+    height: 28,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 8,
+    color: '#000',
+    padding: 0,
+  };
+  return (
+    <div
+      className="inline-flex items-center"
+      style={{
+        gap: 6,
+        alignSelf: 'flex-start',
+        fontFamily: FONT_FAMILIES.sans,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onPrev}
+        disabled={!canPrev}
+        aria-label="Previous year"
+        style={{
+          ...btn,
+          cursor: canPrev ? 'pointer' : 'default',
+          opacity: canPrev ? 1 : 0.3,
+        }}
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <span
+        style={{
+          fontSize: 16,
+          fontWeight: 600,
+          color: '#000',
+          minWidth: 48,
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {year}
+      </span>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canNext}
+        aria-label="Next year"
+        style={{
+          ...btn,
+          cursor: canNext ? 'pointer' : 'default',
+          opacity: canNext ? 1 : 0.3,
+        }}
+      >
+        <ChevronRight size={16} />
+      </button>
     </div>
   );
 }

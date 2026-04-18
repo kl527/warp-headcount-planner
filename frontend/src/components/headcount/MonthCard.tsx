@@ -55,7 +55,7 @@ export function MonthCard({
           color: '#000',
         }}
       >
-        {MONTH_LABELS[monthIndex]}
+        {MONTH_LABELS[monthIndex % 12]}
       </div>
 
       <div

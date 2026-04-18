@@ -10,6 +10,7 @@ interface YearCardProps {
   isDropTarget?: boolean;
   onRegister?: (index: number, el: HTMLElement | null) => void;
   onFlipDone?: (assignmentId: string) => void;
+  onSelect?: (yearIndex: number) => void;
 }
 
 export function YearCard({
@@ -19,6 +20,7 @@ export function YearCard({
   isDropTarget,
   onRegister,
   onFlipDone,
+  onSelect,
 }: YearCardProps) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -50,7 +52,9 @@ export function YearCard({
         transition: 'box-shadow 160ms ease',
       }}
     >
-      <div
+      <button
+        type="button"
+        onClick={() => onSelect?.(yearIndex)}
         style={{
           fontFamily: FONT_FAMILIES.sans,
           fontSize: 20,
@@ -58,10 +62,16 @@ export function YearCard({
           color: '#000',
           flexShrink: 0,
           minWidth: 56,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          textAlign: 'left',
+          cursor: onSelect ? 'pointer' : 'default',
         }}
+        aria-label={`Open ${year} monthly view`}
       >
         {year}
-      </div>
+      </button>
 
       <div
         className="truncate"
