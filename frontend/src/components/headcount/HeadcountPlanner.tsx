@@ -28,6 +28,7 @@ import { type MonthAssignment } from './RolePill';
 import { RunwayCard } from './RunwayCard';
 import { RunwayPanel } from './RunwayPanel';
 import { RoleDndProvider } from './RoleDndProvider';
+import { ShareButton } from './ShareButton';
 import { useRoleDnd, type DropResult } from './roleDnd';
 import { type View } from './ViewToggle';
 import { YearCard } from './YearCard';
@@ -118,6 +119,69 @@ function computeSeries(input: SeriesInput): SeriesResult {
   };
 }
 
+interface ShareableState {
+  financials: FinancialInputs;
+  expenseValues: MonthlyExpenseValues;
+  assignments: Record<number, MonthAssignment[]>;
+  roleSalaryOverrides: Record<string, number>;
+  view: View;
+  focusedYear: number;
+  manualLocation: LocationKey | null;
+}
+
+function stripAssignments(
+  assignments: Record<number, MonthAssignment[]>,
+): Record<number, MonthAssignment[]> {
+  const out: Record<number, MonthAssignment[]> = {};
+  for (const [k, list] of Object.entries(assignments)) {
+    out[Number(k)] = list.map((a) => {
+      const { flipFrom, ...rest } = a;
+      void flipFrom;
+      return rest;
+    });
+  }
+  return out;
+}
+
+function encodeState(state: ShareableState): string {
+  const json = JSON.stringify({
+    financials: state.financials,
+    expenseValues: state.expenseValues,
+    assignments: stripAssignments(state.assignments),
+    roleSalaryOverrides: state.roleSalaryOverrides,
+    view: state.view,
+    focusedYear: state.focusedYear,
+    manualLocation: state.manualLocation,
+  });
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeState(encoded: string): Partial<ShareableState> | null {
+  try {
+    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readInitialState(): Partial<ShareableState> | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('state');
+  if (!raw) return null;
+  return decodeState(raw);
+}
+
 export function HeadcountPlanner() {
   return (
     <RoleDndProvider>
@@ -128,23 +192,40 @@ export function HeadcountPlanner() {
 }
 
 function PlannerInner() {
-  const [financials, setFinancials] = useState<FinancialInputs>({
-    companyBalance: 1_000_000,
-    mrr: 150_000,
-    momGrowthPct: 7,
-  });
+  const [initial] = useState<Partial<ShareableState> | null>(readInitialState);
+  const [financials, setFinancials] = useState<FinancialInputs>(
+    () =>
+      initial?.financials ?? {
+        companyBalance: 1_000_000,
+        mrr: 150_000,
+        momGrowthPct: 7,
+      },
+  );
   const [expenseValues, setExpenseValues] = useState<MonthlyExpenseValues>(
-    defaultMonthlyExpenses,
+    () => initial?.expenseValues ?? defaultMonthlyExpenses(),
   );
   const [assignments, setAssignments] = useState<
     Record<number, MonthAssignment[]>
-  >({});
+  >(() => initial?.assignments ?? {});
   const [roleSalaryOverrides, setRoleSalaryOverrides] = useState<
     Record<string, number>
-  >({});
-  const [view, setView] = useState<View>('month');
-  const [focusedYear, setFocusedYear] = useState<number>(0);
+  >(() => initial?.roleSalaryOverrides ?? {});
+  const [view, setView] = useState<View>(() => initial?.view ?? 'month');
+  const [focusedYear, setFocusedYear] = useState<number>(
+    () => initial?.focusedYear ?? 0,
+  );
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('state')) return;
+    params.delete('state');
+    const qs = params.toString();
+    const next =
+      window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash;
+    window.history.replaceState({}, '', next);
+  }, []);
 
   const baseYear = BASE_YEAR;
 
@@ -165,7 +246,7 @@ function PlannerInner() {
 
   const detectedLocation = useResolvedLocation();
   const [manualLocation, setManualLocation] = useState<LocationKey | null>(
-    null,
+    () => initial?.manualLocation ?? null,
   );
   const selectedLocation: LocationKey =
     manualLocation ?? detectedLocation ?? 'SF';
@@ -327,6 +408,28 @@ function PlannerInner() {
     return () => setDropHandler(null);
   }, [handleDrop, setDropHandler]);
 
+  const buildShareUrl = useCallback(() => {
+    const encoded = encodeState({
+      financials,
+      expenseValues,
+      assignments,
+      roleSalaryOverrides,
+      view,
+      focusedYear,
+      manualLocation,
+    });
+    const { origin, pathname } = window.location;
+    return `${origin}${pathname}?state=${encoded}`;
+  }, [
+    financials,
+    expenseValues,
+    assignments,
+    roleSalaryOverrides,
+    view,
+    focusedYear,
+    manualLocation,
+  ]);
+
   return (
     <div className="min-h-svh">
       <main
@@ -384,6 +487,7 @@ function PlannerInner() {
           onChange={handleFinancialsChange}
           view={view}
           onViewChange={setView}
+          viewToggleAccessory={<ShareButton onShare={buildShareUrl} />}
         />
 
         <section className="mt-[16px] flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">

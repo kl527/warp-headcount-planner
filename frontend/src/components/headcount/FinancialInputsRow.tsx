@@ -79,6 +79,7 @@ interface FinancialInputsRowProps {
   onChange: (patch: Partial<FinancialInputs>) => void;
   view: View;
   onViewChange: (next: View) => void;
+  viewToggleAccessory?: React.ReactNode;
 }
 
 export function FinancialInputsRow({
@@ -86,6 +87,7 @@ export function FinancialInputsRow({
   onChange,
   view,
   onViewChange,
+  viewToggleAccessory,
 }: FinancialInputsRowProps) {
   const isYear = view === 'year';
 
@@ -127,7 +129,10 @@ export function FinancialInputsRow({
         prefix="%"
         onChange={onGrowthChange}
       />
-      <div className="tablet:ml-auto flex-shrink-0">
+      <div className="tablet:ml-auto flex-shrink-0 flex flex-col items-end gap-[16px]">
+        {viewToggleAccessory ? (
+          <div className="flex items-center">{viewToggleAccessory}</div>
+        ) : null}
         <ViewToggle value={view} onChange={onViewChange} />
       </div>
     </div>
