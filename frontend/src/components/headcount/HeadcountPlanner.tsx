@@ -2,7 +2,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useState } from 'react';
 import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
-import { useSalaryCatalog, type RoleFamily } from '../../lib/salaryApi';
+import {
+  useSalaryCatalog,
+  type LocationKey,
+  type RoleFamily,
+} from '../../lib/salaryApi';
+import { useResolvedLocation } from '../../lib/geoApi';
 import { DragGhost } from './DragGhost';
 import { DropZone } from './DropZone';
 import {
@@ -47,10 +52,11 @@ function maxP50(family: RoleFamily): number {
 function annualForRoleKey(
   roleKey: string,
   families: RoleFamily[] | null,
+  multiplier: number,
 ): number {
   if (!families) return 0;
   const family = families.find((f) => f.key === roleKey);
-  return family ? maxP50(family) : 0;
+  return family ? Math.round(maxP50(family) * multiplier) : 0;
 }
 
 interface SeriesInput {
@@ -142,6 +148,21 @@ function PlannerInner() {
   const catalogState = useSalaryCatalog();
   const families =
     catalogState.status === 'ready' ? catalogState.catalog.families : null;
+  const locationsMap =
+    catalogState.status === 'ready' ? catalogState.catalog.locations : null;
+
+  const detectedLocation = useResolvedLocation();
+  const [manualLocation, setManualLocation] = useState<LocationKey | null>(
+    null,
+  );
+  const selectedLocation: LocationKey =
+    manualLocation ?? detectedLocation ?? 'SF';
+
+  const handleLocationChange = useCallback((next: LocationKey) => {
+    setManualLocation(next);
+  }, []);
+
+  const locationMultiplier = locationsMap?.[selectedLocation] ?? 1;
 
   const baselineBurn =
     expenseValues.rent +
@@ -155,7 +176,7 @@ function PlannerInner() {
     for (const a of list) {
       placedRoles.push({
         startMonth,
-        annualUsd: annualForRoleKey(a.roleKey, families),
+        annualUsd: annualForRoleKey(a.roleKey, families, locationMultiplier),
       });
     }
   }
@@ -341,6 +362,8 @@ function PlannerInner() {
             expenseValues={expenseValues}
             onExpenseChange={handleExpenseChange}
             view={view}
+            selectedLocation={selectedLocation}
+            onLocationChange={handleLocationChange}
           />
 
           <div className="flex-1 min-w-0 flex flex-col gap-[14px]">

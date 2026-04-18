@@ -26,12 +26,29 @@ import {
 } from '../../constants/roleDisplay';
 import {
   useSalaryCatalog,
+  type LocationKey,
   type RoleFamily,
   type Team as SalaryTeam,
 } from '../../lib/salaryApi';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { MoneyInput } from './MoneyInput';
 import { useRoleDnd, type RoleCard } from './roleDnd';
 import { type View } from './ViewToggle';
+
+const LOCATION_OPTIONS: readonly LocationKey[] = [
+  'SF',
+  'NYC',
+  'Seattle',
+  'Remote US',
+  'Europe',
+  'LATAM',
+];
 
 const SECTION_BLACK = '#000';
 
@@ -85,6 +102,7 @@ type TeamGroup = { team: SalaryTeam; items: ExpenseItem[] };
 function familiesToTeamGroups(
   families: RoleFamily[],
   view: View,
+  multiplier: number,
 ): TeamGroup[] {
   const byTeam = new Map<SalaryTeam, RoleFamily[]>();
   for (const f of families) {
@@ -107,7 +125,7 @@ function familiesToTeamGroups(
       team,
       items: sorted.map((f) => {
         const label = ROLE_SHORT_LABEL[f.key] ?? f.displayName;
-        const annual = maxP50(f);
+        const annual = Math.round(maxP50(f) * multiplier);
         return {
           id: f.key,
           label,
@@ -448,6 +466,53 @@ function SectionHeader({
   );
 }
 
+function LocationPicker({
+  selected,
+  onChange,
+}: {
+  selected: LocationKey;
+  onChange: (next: LocationKey) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            fontFamily: FONT_FAMILIES.mono,
+            fontSize: 11,
+            letterSpacing: '0.02em',
+            color: 'var(--color-gray-10)',
+          }}
+        >
+          set to {selected}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" style={{ minWidth: 140 }}>
+        <DropdownMenuRadioGroup
+          value={selected}
+          onValueChange={(v) => onChange(v as LocationKey)}
+        >
+          {LOCATION_OPTIONS.map((loc) => (
+            <DropdownMenuRadioItem
+              key={loc}
+              value={loc}
+              style={{ fontFamily: FONT_FAMILIES.mono, fontSize: 12 }}
+            >
+              {loc}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 const STAGGER_MS = 30;
 const ITEM_DURATION_MS = 160;
 const CONTAINER_DURATION_MS = 260;
@@ -621,17 +686,25 @@ interface ExpensesSidebarProps {
   expenseValues: MonthlyExpenseValues;
   onExpenseChange: (patch: Partial<MonthlyExpenseValues>) => void;
   view: View;
+  selectedLocation: LocationKey;
+  onLocationChange: (next: LocationKey) => void;
 }
 
 export function ExpensesSidebar({
   expenseValues,
   onExpenseChange,
   view,
+  selectedLocation,
+  onLocationChange,
 }: ExpensesSidebarProps) {
   const state = useSalaryCatalog();
+  const multiplier =
+    state.status === 'ready'
+      ? state.catalog.locations[selectedLocation] ?? 1
+      : 1;
   const teamGroups =
     state.status === 'ready'
-      ? familiesToTeamGroups(state.catalog.families, view)
+      ? familiesToTeamGroups(state.catalog.families, view, multiplier)
       : [];
   const valueMultiplier = view === 'year' ? 12 : 1;
   const [expensesCollapsed, setExpensesCollapsed] = useState(false);
@@ -685,11 +758,24 @@ export function ExpensesSidebar({
           valueMultiplier={valueMultiplier}
         />
       </StaggeredCollapse>
-      <SectionHeader
-        title="Team"
-        collapsed={teamCollapsed}
-        onToggle={() => setTeamCollapsed((v) => !v)}
-      />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}
+      >
+        <SectionHeader
+          title="Team"
+          collapsed={teamCollapsed}
+          onToggle={() => setTeamCollapsed((v) => !v)}
+        />
+        <LocationPicker
+          selected={selectedLocation}
+          onChange={onLocationChange}
+        />
+      </div>
       <StaggeredCollapse collapsed={teamCollapsed} gap={14}>
         {teamGroups.map((g) => (
           <StackedTeamGroup

@@ -7,6 +7,7 @@
  * scope, and expose a pure `getSalaryRange` lookup for components.
  */
 import { useEffect, useState } from "react";
+import { getBackendBaseUrl } from "./backend";
 
 export type Level = "IC" | "Senior" | "Staff" | "Manager";
 export type Team =
@@ -53,14 +54,6 @@ export type SalaryRange = {
   displayName: string;
   note?: string;
 };
-
-function getBackendBaseUrl(): string {
-  const raw = import.meta.env.VITE_BACKEND_URL;
-  if (typeof raw === "string" && raw.length > 0) {
-    return raw.replace(/\/+$/, "");
-  }
-  return "http://localhost:8787";
-}
 
 let catalogPromise: Promise<SalaryCatalog> | null = null;
 
