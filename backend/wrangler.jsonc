@@ -14,5 +14,13 @@
       "database_id": "796283d0-b5b1-4b80-b2e0-31c0cbdc60e1",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+  "vars": {
+    "SHARE_FROM_EMAIL": "Warp Planner <noreply@warp.kyungsub.com>"
+  }
 }

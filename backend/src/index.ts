@@ -43,9 +43,26 @@ function isScenarioShape(value: unknown): value is StoredScenario {
   );
 }
 
+interface SendEmailBinding {
+  send(message: {
+    to: string | string[];
+    from: string | { email: string; name: string };
+    subject: string;
+    html?: string;
+    text?: string;
+    cc?: string | string[];
+    bcc?: string | string[];
+    replyTo?: string | { email: string; name: string };
+  }): Promise<{ messageId?: string }>;
+}
+
 export interface Env {
   DB: D1Database;
+  EMAIL: SendEmailBinding;
+  SHARE_FROM_EMAIL: string;
 }
+
+const MAX_HTML_BYTES = 600_000; // generous cap for the inline SVG deck
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -60,7 +77,7 @@ app.use(
       if (/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) return origin;
       return "";
     },
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowHeaders: ["content-type"],
   }),
 );
@@ -170,24 +187,190 @@ app.post("/share-emails", async (c) => {
   if (typeof body !== "object" || body === null) {
     return c.json({ error: "invalid_body" }, 400);
   }
-  const { email, shareUrl } = body as { email?: unknown; shareUrl?: unknown };
+  const { email, shareUrl, scenarioName } = body as {
+    email?: unknown;
+    shareUrl?: unknown;
+    scenarioName?: unknown;
+  };
   if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
     return c.json({ error: "invalid_email" }, 400);
   }
   const normalized = email.trim().toLowerCase();
   const url = typeof shareUrl === "string" ? shareUrl : null;
+  const name =
+    typeof scenarioName === "string" && scenarioName.trim().length > 0
+      ? scenarioName.trim().slice(0, 60)
+      : null;
 
+  let insertedId: number | null = null;
   try {
-    await c.env.DB.prepare(
-      "INSERT INTO share_emails (email, share_url) VALUES (?, ?)",
+    const result = await c.env.DB.prepare(
+      "INSERT INTO share_emails (email, share_url, scenario_name) VALUES (?, ?, ?)",
     )
-      .bind(normalized, url)
+      .bind(normalized, url, name)
       .run();
+    const lastId = (result.meta as { last_row_id?: number } | undefined)
+      ?.last_row_id;
+    if (typeof lastId === "number") insertedId = lastId;
   } catch (err) {
     console.error("[share-emails] insert failed", err);
     return c.json({ error: "storage_failed" }, 500);
   }
-  return c.json({ ok: true });
+  return c.json({ ok: true, id: insertedId });
+});
+
+app.post("/share-deck", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (typeof body !== "object" || body === null) {
+    return c.json({ error: "invalid_body" }, 400);
+  }
+  const { email, shareUrl, subject, html, scenarioName } = body as {
+    email?: unknown;
+    shareUrl?: unknown;
+    subject?: unknown;
+    html?: unknown;
+    scenarioName?: unknown;
+  };
+  if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
+    return c.json({ error: "invalid_email" }, 400);
+  }
+  if (typeof html !== "string" || html.length === 0) {
+    return c.json({ error: "invalid_html" }, 400);
+  }
+  if (html.length > MAX_HTML_BYTES) {
+    return c.json({ error: "html_too_large" }, 413);
+  }
+  const normalized = email.trim().toLowerCase();
+  const url = typeof shareUrl === "string" ? shareUrl : null;
+  const subj =
+    typeof subject === "string" && subject.trim().length > 0
+      ? subject.trim()
+      : "Your runway plan";
+  const name =
+    typeof scenarioName === "string" && scenarioName.trim().length > 0
+      ? scenarioName.trim().slice(0, 60)
+      : null;
+
+  let insertedId: number | null = null;
+  try {
+    const result = await c.env.DB.prepare(
+      "INSERT INTO share_emails (email, share_url, scenario_name) VALUES (?, ?, ?)",
+    )
+      .bind(normalized, url, name)
+      .run();
+    const lastId = (result.meta as { last_row_id?: number } | undefined)
+      ?.last_row_id;
+    if (typeof lastId === "number") insertedId = lastId;
+  } catch (err) {
+    console.error("[share-deck] d1 insert failed", err);
+    // Keep going — email matters more than logging.
+  }
+
+  const from = c.env.SHARE_FROM_EMAIL;
+  if (!from) {
+    console.error("[share-deck] missing SHARE_FROM_EMAIL");
+    return c.json({ error: "email_not_configured" }, 500);
+  }
+
+  try {
+    await c.env.EMAIL.send({
+      to: normalized,
+      from,
+      subject: subj,
+      html,
+    });
+  } catch (err) {
+    console.error("[share-deck] send error", err);
+    return c.json({ error: "email_failed" }, 502);
+  }
+
+  return c.json({ ok: true, id: insertedId });
+});
+
+app.get("/share-emails", async (c) => {
+  const emailParam = c.req.query("email");
+  if (typeof emailParam !== "string" || !EMAIL_RE.test(emailParam.trim())) {
+    return c.json({ error: "invalid_email" }, 400);
+  }
+  const normalized = emailParam.trim().toLowerCase();
+
+  let rows: {
+    id: number;
+    scenario_name: string | null;
+    share_url: string | null;
+    created_at: string;
+  }[] = [];
+  try {
+    const result = await c.env.DB.prepare(
+      "SELECT id, scenario_name, share_url, created_at FROM share_emails WHERE email = ? ORDER BY created_at DESC LIMIT 20",
+    )
+      .bind(normalized)
+      .all();
+    rows = (result.results ?? []) as typeof rows;
+  } catch (err) {
+    console.error("[share-emails] select failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
+
+  const scenarios = rows
+    .filter((r) => typeof r.share_url === "string" && r.share_url.length > 0)
+    .map((r) => ({
+      id: r.id,
+      name: r.scenario_name,
+      shareUrl: r.share_url as string,
+      createdAt: r.created_at,
+    }));
+
+  c.header("Cache-Control", "no-store");
+  return c.json({ scenarios });
+});
+
+app.patch("/share-emails/:id/name", async (c) => {
+  const idStr = c.req.param("id");
+  const id = Number(idStr);
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: "invalid_id" }, 400);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (typeof body !== "object" || body === null) {
+    return c.json({ error: "invalid_body" }, 400);
+  }
+  const { email, name } = body as { email?: unknown; name?: unknown };
+  if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
+    return c.json({ error: "invalid_email" }, 400);
+  }
+  if (typeof name !== "string") {
+    return c.json({ error: "invalid_name" }, 400);
+  }
+  const trimmed = name.trim().slice(0, 60);
+  const normalized = email.trim().toLowerCase();
+
+  try {
+    const result = await c.env.DB.prepare(
+      "UPDATE share_emails SET scenario_name = ? WHERE id = ? AND email = ?",
+    )
+      .bind(trimmed.length > 0 ? trimmed : null, id, normalized)
+      .run();
+    const changes = (result.meta as { changes?: number } | undefined)
+      ?.changes ?? 0;
+    if (changes === 0) return c.json({ error: "not_found" }, 404);
+  } catch (err) {
+    console.error("[share-emails] rename failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
+
+  return c.json({ ok: true, name: trimmed.length > 0 ? trimmed : null });
 });
 
 app.get("/scenarios/:shortCode", (c) => {
