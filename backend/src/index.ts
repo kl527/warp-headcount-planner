@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { customAlphabet } from "nanoid";
+import { salaryBandsHandler, salaryLookupHandler } from "./salaryBands";
 
 // TODO: swap Map for Workers KV or D1 before this leaves local dev —
 // in-memory state only survives within a single Worker isolate.
@@ -52,6 +53,9 @@ app.use(
 );
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+app.get("/salary-bands", salaryBandsHandler);
+app.get("/salary-bands/lookup", salaryLookupHandler);
 
 app.post("/scenarios", async (c) => {
   let body: unknown;

@@ -16,11 +16,14 @@ export type Department =
   | "Finance"
   | "Recruiting";
 
+export type RoleLevel = "IC" | "Senior" | "Staff" | "Manager";
+
 export type Role = {
   id: string;
   title: string;
   department: Department;
   location: Location;
+  level?: RoleLevel;
   baseSalary: number;
   benefitsMultiplier: number;
   startMonth: number;
