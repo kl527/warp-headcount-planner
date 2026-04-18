@@ -100,6 +100,7 @@ export function RolePill({ assignment, monthIndex, onFlipDone }: RolePillProps) 
   return (
     <div
       ref={ref}
+      data-role-pill=""
       onPointerDown={handlePointerDown}
       className="flex items-center gap-[6px] truncate"
       style={{

@@ -33,9 +33,29 @@ export function YearCard({
   const year = new Date().getFullYear() + yearIndex;
   const sourceMonth = yearIndex * 12;
 
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Ignore clicks that originate on an interactive child (role pills).
+    if ((e.target as HTMLElement).closest('[data-role-pill]')) return;
+    onSelect?.(yearIndex);
+  };
+
   return (
     <div
       ref={ref}
+      onClick={onSelect ? handleClick : undefined}
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelect(yearIndex);
+              }
+            }
+          : undefined
+      }
+      aria-label={onSelect ? `Open ${year} monthly view` : undefined}
       className="min-h-[96px]"
       style={{
         background: '#fff',
@@ -46,15 +66,14 @@ export function YearCard({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 20,
+        cursor: onSelect ? 'pointer' : undefined,
         boxShadow: isDropTarget
           ? '0 0 0 1.5px var(--color-accent-9), 0 6px 14px rgba(0, 0, 0, 0.08)'
           : '0 2px 4px rgba(0, 0, 0, 0.05)',
         transition: 'box-shadow 160ms ease',
       }}
     >
-      <button
-        type="button"
-        onClick={() => onSelect?.(yearIndex)}
+      <span
         style={{
           fontFamily: FONT_FAMILIES.sans,
           fontSize: 20,
@@ -62,16 +81,10 @@ export function YearCard({
           color: '#000',
           flexShrink: 0,
           minWidth: 56,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          textAlign: 'left',
-          cursor: onSelect ? 'pointer' : 'default',
         }}
-        aria-label={`Open ${year} monthly view`}
       >
         {year}
-      </button>
+      </span>
 
       <div
         className="truncate"
