@@ -1,19 +1,34 @@
-import { Check, CornerDownLeft, Share2 } from 'lucide-react';
+import { Check, CornerDownLeft, Loader2, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { getBackendBaseUrl } from '../../lib/backend';
 
-interface ShareButtonProps {
-  onShare: () => string;
+export interface SendDeckResult {
+  url: string;
+  subject: string;
+  html: string;
+  scenarioName: string;
 }
 
-type Mode = 'idle' | 'input' | 'copied';
+interface ShareButtonProps {
+  onShare: () => Promise<SendDeckResult>;
+  onSent?: (entry: {
+    email: string;
+    name: string;
+    shareUrl: string;
+    createdAt: string;
+  }) => void;
+}
+
+type Mode = 'idle' | 'input' | 'sending' | 'sent' | 'error';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HEIGHT = 32;
 const IDLE_WIDTH = 104;
-const INPUT_WIDTH = 220;
-const COPIED_WIDTH = 138;
+const INPUT_WIDTH = 240;
+const SENDING_WIDTH = 150;
+const SENT_WIDTH = 164;
+const ERROR_WIDTH = 180;
 const MORPH_DURATION = 320;
 const MORPH_EASING = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
@@ -38,10 +53,9 @@ async function copyToClipboard(url: string) {
   document.body.removeChild(ta);
 }
 
-export function ShareButton({ onShare }: ShareButtonProps) {
+export function ShareButton({ onShare, onSent }: ShareButtonProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [email, setEmail] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -52,11 +66,11 @@ export function ShareButton({ onShare }: ShareButtonProps) {
   }, [mode]);
 
   useEffect(() => {
-    if (mode !== 'copied') return;
+    if (mode !== 'sent' && mode !== 'error') return;
     const t = setTimeout(() => {
       setMode('idle');
       setEmail('');
-    }, 1800);
+    }, mode === 'sent' ? 2200 : 2600);
     return () => clearTimeout(t);
   }, [mode]);
 
@@ -70,21 +84,47 @@ export function ShareButton({ onShare }: ShareButtonProps) {
       inputRef.current?.focus();
       return;
     }
-    if (submitting) return;
-    setSubmitting(true);
-    const url = onShare();
-    await copyToClipboard(url);
+    if (mode === 'sending') return;
+    setMode('sending');
+    let deck: SendDeckResult;
     try {
-      await fetch(`${getBackendBaseUrl()}/share-emails`, {
+      deck = await onShare();
+    } catch (err) {
+      console.error('[share] deck build failed', err);
+      setMode('error');
+      return;
+    }
+    const { url, subject, html, scenarioName } = deck;
+    // Clipboard as a bonus — independent of send success.
+    void copyToClipboard(url);
+    try {
+      const res = await fetch(`${getBackendBaseUrl()}/share-deck`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: trimmed, shareUrl: url }),
+        body: JSON.stringify({
+          email: trimmed,
+          shareUrl: url,
+          subject,
+          html,
+          scenarioName,
+        }),
       });
+      if (!res.ok) {
+        console.error('[share] send failed', res.status, await res.text());
+        setMode('error');
+        return;
+      }
+      onSent?.({
+        email: trimmed.toLowerCase(),
+        name: scenarioName,
+        shareUrl: url,
+        createdAt: new Date().toISOString(),
+      });
+      setMode('sent');
     } catch (err) {
-      console.error('[share] email save failed', err);
+      console.error('[share] send error', err);
+      setMode('error');
     }
-    setSubmitting(false);
-    setMode('copied');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -99,10 +139,27 @@ export function ShareButton({ onShare }: ShareButtonProps) {
   };
 
   const width =
-    mode === 'input' ? INPUT_WIDTH : mode === 'copied' ? COPIED_WIDTH : IDLE_WIDTH;
+    mode === 'input'
+      ? INPUT_WIDTH
+      : mode === 'sending'
+        ? SENDING_WIDTH
+        : mode === 'sent'
+          ? SENT_WIDTH
+          : mode === 'error'
+            ? ERROR_WIDTH
+            : IDLE_WIDTH;
 
-  const copiedBg = 'var(--color-gray-12)';
+  const successBg = 'var(--color-gray-12)';
+  const errorBg = '#691410';
   const baseBg = 'var(--color-card)';
+  const bg =
+    mode === 'sent'
+      ? successBg
+      : mode === 'error'
+        ? errorBg
+        : baseBg;
+  const fg =
+    mode === 'sent' || mode === 'error' ? '#fff' : 'var(--color-gray-12)';
 
   return (
     <div
@@ -110,8 +167,8 @@ export function ShareButton({ onShare }: ShareButtonProps) {
       style={{
         height: HEIGHT,
         width,
-        background: mode === 'copied' ? copiedBg : baseBg,
-        color: mode === 'copied' ? '#fff' : 'var(--color-gray-12)',
+        background: bg,
+        color: fg,
         border: '0.5px solid rgba(0, 0, 0, 0.3)',
         borderRadius: RADIUS.lg,
         overflow: 'hidden',
@@ -125,10 +182,26 @@ export function ShareButton({ onShare }: ShareButtonProps) {
         onEmailChange={setEmail}
         onKeyDown={handleKeyDown}
         onSubmit={() => void trySubmit()}
-        canSubmit={EMAIL_RE.test(email.trim()) && !submitting}
+        canSubmit={EMAIL_RE.test(email.trim())}
         inputRef={inputRef}
       />
-      <CopiedFace active={mode === 'copied'} />
+      <CenterFace
+        active={mode === 'sending'}
+        icon={<Loader2 size={14} strokeWidth={2.25} className="share-spin" />}
+        label="Sending…"
+      />
+      <CenterFace
+        active={mode === 'sent'}
+        icon={<Check size={14} strokeWidth={2.25} />}
+        label="Sent to inbox!"
+      />
+      <CenterFace
+        active={mode === 'error'}
+        icon={null}
+        label="Send failed — link copied"
+      />
+      <style>{`@keyframes share-spin { to { transform: rotate(360deg); } }
+.share-spin { animation: share-spin 0.9s linear infinite; }`}</style>
     </div>
   );
 }
@@ -205,7 +278,7 @@ function InputFace({
         inputMode="email"
         autoComplete="email"
         spellCheck={false}
-        placeholder="sample@email.com"
+        placeholder="send deck to email…"
         value={email}
         onChange={(e) => onEmailChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -226,7 +299,7 @@ function InputFace({
       <button
         type="button"
         onClick={onSubmit}
-        aria-label="Submit email and copy link"
+        aria-label="Send deck to email"
         tabIndex={active ? 0 : -1}
         disabled={!canSubmit}
         className="inline-flex items-center justify-center"
@@ -235,7 +308,7 @@ function InputFace({
           height: HEIGHT - 2,
           padding: 0,
           background: 'transparent',
-          color: 'var(--color-gray-10)',
+          color: canSubmit ? 'var(--color-gray-12)' : 'var(--color-gray-10)',
           border: 'none',
           cursor: canSubmit ? 'pointer' : 'default',
           outline: 'none',
@@ -247,7 +320,15 @@ function InputFace({
   );
 }
 
-function CopiedFace({ active }: { active: boolean }) {
+function CenterFace({
+  active,
+  icon,
+  label,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <div
       aria-hidden={!active}
@@ -262,11 +343,12 @@ function CopiedFace({ active }: { active: boolean }) {
         color: 'inherit',
         opacity: active ? 1 : 0,
         pointerEvents: active ? 'auto' : 'none',
+        whiteSpace: 'nowrap',
         transition: `opacity ${MORPH_DURATION / 2}ms ease ${active ? MORPH_DURATION / 2 : 0}ms`,
       }}
     >
-      <Check size={14} strokeWidth={2.25} />
-      <span>Link copied!</span>
+      {icon}
+      <span>{label}</span>
     </div>
   );
 }

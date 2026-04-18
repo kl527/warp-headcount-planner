@@ -10,7 +10,6 @@ import { FONT_FAMILIES, PAGE_WIDTH, RADIUS } from '../../constants/design';
 import {
   useSalaryCatalog,
   type LocationKey,
-  type RoleFamily,
 } from '../../lib/salaryApi';
 import { useResolvedLocation } from '../../lib/geoApi';
 import { DragGhost } from './DragGhost';
@@ -28,13 +27,24 @@ import { type MonthAssignment } from './RolePill';
 import { RunwayCard } from './RunwayCard';
 import { RunwayPanel } from './RunwayPanel';
 import { RoleDndProvider } from './RoleDndProvider';
-import { ShareButton } from './ShareButton';
+import { buildDeckEmailHtml } from '../../lib/emailDeck';
+import { ShareButton, type SendDeckResult } from './ShareButton';
+import { CompareStrip, type SavedScenario } from './CompareStrip';
 import { useRoleDnd, type DropResult } from './roleDnd';
 import { type View } from './ViewToggle';
+import {
+  HORIZON_YEARS,
+  computeSeries,
+  placedRolesFromAssignments,
+  baselineBurnFromExpenses,
+} from '../../lib/scenarioMath';
+import {
+  encodeState,
+  decodeState,
+  type ShareableState,
+} from '../../lib/shareState';
 import { YearCard } from './YearCard';
 
-const HORIZON_YEARS = 4;
-const HORIZON_MONTHS = HORIZON_YEARS * 12;
 const BASE_YEAR = 2026;
 
 function defaultMonthlyExpenses(): MonthlyExpenseValues {
@@ -44,134 +54,6 @@ function defaultMonthlyExpenses(): MonthlyExpenseValues {
     tools: 5000,
     custom: [{ id: nanoid(8), label: '', value: 0 }],
   };
-}
-
-type PlacedRole = { startMonth: number; annualUsd: number };
-
-function maxP50(family: RoleFamily): number {
-  let max = 0;
-  for (const band of Object.values(family.levels)) {
-    if (band && band.p50 > max) max = band.p50;
-  }
-  return max;
-}
-
-function annualForRoleKey(
-  roleKey: string,
-  families: RoleFamily[] | null,
-  multiplier: number,
-  overrides: Record<string, number>,
-): number {
-  const override = overrides[roleKey];
-  if (override !== undefined) return override;
-  if (!families) return 0;
-  const family = families.find((f) => f.key === roleKey);
-  return family ? Math.round(maxP50(family) * multiplier) : 0;
-}
-
-interface SeriesInput {
-  startingCash: number;
-  baselineBurn: number;
-  baseMrr: number;
-  momGrowthPct: number;
-  roles: PlacedRole[];
-}
-
-interface SeriesResult {
-  balances: number[]; // length HORIZON_MONTHS, cash at start of each month
-  endOfMonthBalances: number[]; // length HORIZON_MONTHS, cash at end of each month
-  runwayMonths: number | null; // null = never goes to zero within horizon
-}
-
-function computeSeries(input: SeriesInput): SeriesResult {
-  const series: number[] = [];
-  let cash = input.startingCash;
-  series.push(cash);
-  const growth = 1 + input.momGrowthPct / 100;
-  for (let m = 0; m < HORIZON_MONTHS; m++) {
-    const revenue = input.baseMrr * Math.pow(growth, m);
-    let roleBurn = 0;
-    for (const r of input.roles) {
-      if (r.startMonth <= m) roleBurn += r.annualUsd / 12;
-    }
-    cash = cash - input.baselineBurn - roleBurn + revenue;
-    series.push(cash);
-  }
-
-  let runwayMonths: number | null = null;
-  if (series[0] <= 0) {
-    runwayMonths = 0;
-  } else {
-    for (let m = 1; m < series.length; m++) {
-      if (series[m] <= 0) {
-        const prev = series[m - 1];
-        const curr = series[m];
-        runwayMonths = m - 1 + prev / (prev - curr);
-        break;
-      }
-    }
-  }
-
-  return {
-    balances: series.slice(0, HORIZON_MONTHS),
-    endOfMonthBalances: series.slice(1, HORIZON_MONTHS + 1),
-    runwayMonths,
-  };
-}
-
-interface ShareableState {
-  financials: FinancialInputs;
-  expenseValues: MonthlyExpenseValues;
-  assignments: Record<number, MonthAssignment[]>;
-  roleSalaryOverrides: Record<string, number>;
-  view: View;
-  focusedYear: number;
-  manualLocation: LocationKey | null;
-}
-
-function stripAssignments(
-  assignments: Record<number, MonthAssignment[]>,
-): Record<number, MonthAssignment[]> {
-  const out: Record<number, MonthAssignment[]> = {};
-  for (const [k, list] of Object.entries(assignments)) {
-    out[Number(k)] = list.map((a) => {
-      const { flipFrom, ...rest } = a;
-      void flipFrom;
-      return rest;
-    });
-  }
-  return out;
-}
-
-function encodeState(state: ShareableState): string {
-  const json = JSON.stringify({
-    financials: state.financials,
-    expenseValues: state.expenseValues,
-    assignments: stripAssignments(state.assignments),
-    roleSalaryOverrides: state.roleSalaryOverrides,
-    view: state.view,
-    focusedYear: state.focusedYear,
-    manualLocation: state.manualLocation,
-  });
-  const bytes = new TextEncoder().encode(json);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function decodeState(encoded: string): Partial<ShareableState> | null {
-  try {
-    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const json = new TextDecoder().decode(bytes);
-    const parsed = JSON.parse(json);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 function readInitialState(): Partial<ShareableState> | null {
@@ -213,6 +95,12 @@ function PlannerInner() {
   const [view, setView] = useState<View>(() => initial?.view ?? 'month');
   const [focusedYear, setFocusedYear] = useState<number>(
     () => initial?.focusedYear ?? 0,
+  );
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[] | null>(
+    null,
+  );
+  const [preLoadSnapshot, setPreLoadSnapshot] = useState<ShareableState | null>(
+    null,
   );
   const { registerMonth, setDropHandler, drag } = useRoleDnd();
 
@@ -264,36 +152,28 @@ function PlannerInner() {
 
   const locationMultiplier = locationsMap?.[selectedLocation] ?? 1;
 
-  const baselineBurn =
-    expenseValues.rent +
-    expenseValues.ads +
-    expenseValues.tools +
-    expenseValues.custom.reduce((sum, c) => sum + c.value, 0);
+  const baselineBurn = baselineBurnFromExpenses(expenseValues);
 
-  const placedRoles: PlacedRole[] = [];
-  for (const [monthStr, list] of Object.entries(assignments)) {
-    const startMonth = Number(monthStr);
-    for (const a of list) {
-      placedRoles.push({
-        startMonth,
-        annualUsd: annualForRoleKey(
-          a.roleKey,
-          families,
-          locationMultiplier,
-          roleSalaryOverrides,
-        ),
-      });
-    }
-  }
+  const placedRoles = placedRolesFromAssignments(
+    assignments,
+    families,
+    locationMultiplier,
+    roleSalaryOverrides,
+  );
 
-  const { balances: monthlyBalances, endOfMonthBalances, runwayMonths } =
-    computeSeries({
-      startingCash: financials.companyBalance,
-      baselineBurn,
-      baseMrr: financials.mrr,
-      momGrowthPct: financials.momGrowthPct,
-      roles: placedRoles,
-    });
+  const {
+    balances: monthlyBalances,
+    endOfMonthBalances,
+    roleBurnByMonth,
+    monthlyRevenue,
+    runwayMonths,
+  } = computeSeries({
+    startingCash: financials.companyBalance,
+    baselineBurn,
+    baseMrr: financials.mrr,
+    momGrowthPct: financials.momGrowthPct,
+    roles: placedRoles,
+  });
 
   const yearlyBalances: number[] = [];
   for (let y = 0; y < HORIZON_YEARS; y++) {
@@ -408,7 +288,9 @@ function PlannerInner() {
     return () => setDropHandler(null);
   }, [handleDrop, setDropHandler]);
 
-  const buildShareUrl = useCallback(() => {
+  const buildShareDeck = useCallback<
+    () => Promise<SendDeckResult>
+  >(async () => {
     const encoded = encodeState({
       financials,
       expenseValues,
@@ -419,7 +301,27 @@ function PlannerInner() {
       manualLocation,
     });
     const { origin, pathname } = window.location;
-    return `${origin}${pathname}?state=${encoded}`;
+    const url = `${origin}${pathname}?state=${encoded}`;
+    const { subject, html } = await buildDeckEmailHtml({
+      shareUrl: url,
+      baseYear,
+      horizonYears: HORIZON_YEARS,
+      startingCash: financials.companyBalance,
+      runwayMonths,
+      monthlyBalances,
+      endOfMonthBalances,
+      roleBurnByMonth,
+      monthlyRevenue,
+      baselineBurnMonthly: baselineBurn,
+      assignments,
+      focusedYearIndex: focusedYear,
+    });
+    const scenarioName = `Plan · ${new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(new Date())}`;
+    return { url, subject, html, scenarioName };
   }, [
     financials,
     expenseValues,
@@ -428,7 +330,91 @@ function PlannerInner() {
     view,
     focusedYear,
     manualLocation,
+    baseYear,
+    runwayMonths,
+    monthlyBalances,
+    endOfMonthBalances,
+    roleBurnByMonth,
+    monthlyRevenue,
+    baselineBurn,
   ]);
+
+  const applyState = useCallback((state: Partial<ShareableState>) => {
+    if (state.financials) setFinancials(state.financials);
+    if (state.expenseValues) setExpenseValues(state.expenseValues);
+    if (state.assignments) setAssignments(state.assignments);
+    if (state.roleSalaryOverrides) {
+      setRoleSalaryOverrides(state.roleSalaryOverrides);
+    }
+    if (state.view) setView(state.view);
+    if (typeof state.focusedYear === 'number') {
+      setFocusedYear(state.focusedYear);
+    }
+    if (state.manualLocation !== undefined) {
+      setManualLocation(state.manualLocation);
+    }
+  }, []);
+
+  const handleLoadScenario = useCallback(
+    (state: Partial<ShareableState>) => {
+      setPreLoadSnapshot((prev) =>
+        // Don't clobber an earlier snapshot — revert always returns to the
+        // state the user had before the first Load in this chain.
+        prev ?? {
+          financials,
+          expenseValues,
+          assignments,
+          roleSalaryOverrides,
+          view,
+          focusedYear,
+          manualLocation,
+        },
+      );
+      applyState(state);
+    },
+    [
+      applyState,
+      financials,
+      expenseValues,
+      assignments,
+      roleSalaryOverrides,
+      view,
+      focusedYear,
+      manualLocation,
+    ],
+  );
+
+  const handleRevertLoad = useCallback(() => {
+    if (!preLoadSnapshot) return;
+    applyState(preLoadSnapshot);
+    setPreLoadSnapshot(null);
+  }, [applyState, preLoadSnapshot]);
+
+  const handleScenarioSent = useCallback(
+    (entry: { name: string; shareUrl: string; createdAt: string }) => {
+      setSavedScenarios((prev) =>
+        prev === null
+          ? prev
+          : [
+              {
+                id: -Date.now(), // local placeholder — backend id arrives on next fetch
+                name: entry.name,
+                shareUrl: entry.shareUrl,
+                createdAt: entry.createdAt,
+              },
+              ...prev,
+            ],
+      );
+    },
+    [],
+  );
+
+  const handleSavedScenariosChange = useCallback(
+    (next: SavedScenario[] | null) => {
+      setSavedScenarios(next);
+    },
+    [],
+  );
 
   return (
     <div className="min-h-svh">
@@ -487,7 +473,9 @@ function PlannerInner() {
           onChange={handleFinancialsChange}
           view={view}
           onViewChange={setView}
-          viewToggleAccessory={<ShareButton onShare={buildShareUrl} />}
+          viewToggleAccessory={
+            <ShareButton onShare={buildShareDeck} onSent={handleScenarioSent} />
+          }
         />
 
         <section className="mt-[16px] flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
@@ -577,6 +565,29 @@ function PlannerInner() {
             onClick={() => setView('runway')}
           />
         </section>
+
+        <CompareStrip
+          currentState={
+            preLoadSnapshot ?? {
+              financials,
+              expenseValues,
+              assignments,
+              roleSalaryOverrides,
+              view,
+              focusedYear,
+              manualLocation,
+            }
+          }
+          families={families}
+          locationMultiplier={locationMultiplier}
+          locationsMap={locationsMap}
+          detectedLocation={detectedLocation}
+          savedScenarios={savedScenarios}
+          onSavedScenariosChange={handleSavedScenariosChange}
+          onLoad={handleLoadScenario}
+          canRevert={preLoadSnapshot !== null}
+          onRevert={handleRevertLoad}
+        />
       </main>
     </div>
   );
