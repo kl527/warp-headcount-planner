@@ -1,3 +1,5 @@
+import { nanoid } from 'nanoid';
+import { useCallback, useEffect, useState } from 'react';
 import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
 import {
   HIRES,
@@ -5,11 +7,15 @@ import {
   hiresForYear,
   type Hire,
 } from '../../data/headcount';
+import { DragGhost } from './DragGhost';
 import { DropZone } from './DropZone';
 import { ExpensesSidebar } from './ExpensesSidebar';
 import { FinancialInputsRow } from './FinancialInputsRow';
 import { MonthCard } from './MonthCard';
+import { type MonthAssignment } from './RolePill';
 import { RunwayCard } from './RunwayCard';
+import { RoleDndProvider } from './RoleDndProvider';
+import { useRoleDnd, type DropResult } from './roleDnd';
 
 const STARTING_CASH = 2_000_000;
 const BASELINE_MONTHLY_BURN = 30_000;
@@ -30,8 +36,97 @@ function computeMonthlyBalances(yearHires: Hire[]): number[] {
 }
 
 export function HeadcountPlanner() {
+  return (
+    <RoleDndProvider>
+      <PlannerInner />
+      <DragGhost />
+    </RoleDndProvider>
+  );
+}
+
+function PlannerInner() {
   const yearHires = hiresForYear(HIRES, PLAN_YEAR);
   const monthlyBalances = computeMonthlyBalances(yearHires);
+
+  const [assignments, setAssignments] = useState<
+    Record<number, MonthAssignment[]>
+  >({});
+  const { registerMonth, setDropHandler, drag } = useRoleDnd();
+
+  const handleDrop = useCallback((result: DropResult) => {
+    const { target, card, source, ghostRect } = result;
+
+    // Sidebar → month: add a fresh pill that FLIPs in from the cursor.
+    if (source.kind === 'sidebar') {
+      if (target === null) return;
+      const entry: MonthAssignment = {
+        id: nanoid(8),
+        roleKey: card.roleKey,
+        label: card.label,
+        team: card.team,
+        flipFrom: ghostRect,
+      };
+      setAssignments((prev) => {
+        const cur = prev[target] ?? [];
+        return { ...prev, [target]: [...cur, entry] };
+      });
+      return;
+    }
+
+    // source.kind === 'month'
+    const fromMonth = source.monthIndex;
+    const fromId = source.assignmentId;
+
+    if (target === null) {
+      // Dropped outside any month → delete.
+      setAssignments((prev) => {
+        const cur = prev[fromMonth];
+        if (!cur) return prev;
+        return {
+          ...prev,
+          [fromMonth]: cur.filter((a) => a.id !== fromId),
+        };
+      });
+      return;
+    }
+
+    if (target === fromMonth) {
+      // Same month → noop; the ghost fades and the pill reveals itself.
+      return;
+    }
+
+    // Move across months: remove from source, append to target w/ FLIP.
+    setAssignments((prev) => {
+      const src = prev[fromMonth] ?? [];
+      const moving = src.find((a) => a.id === fromId);
+      if (!moving) return prev;
+      const dst = prev[target] ?? [];
+      return {
+        ...prev,
+        [fromMonth]: src.filter((a) => a.id !== fromId),
+        [target]: [...dst, { ...moving, flipFrom: ghostRect }],
+      };
+    });
+  }, []);
+
+  const handleFlipDone = useCallback((assignmentId: string) => {
+    setAssignments((prev) => {
+      const next: Record<number, MonthAssignment[]> = {};
+      for (const [k, list] of Object.entries(prev)) {
+        next[Number(k)] = list.map((a) =>
+          a.id === assignmentId && a.flipFrom
+            ? { ...a, flipFrom: undefined }
+            : a,
+        );
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setDropHandler(handleDrop);
+    return () => setDropHandler(null);
+  }, [handleDrop, setDropHandler]);
 
   return (
     <div className="min-h-svh">
@@ -42,7 +137,7 @@ export function HeadcountPlanner() {
           paddingInline: 'clamp(16px, calc((100vw - 1040px) / 2), 120px)',
         }}
       >
-        <section className="flex flex-col tablet:flex-row gap-[32px] items-stretch mb-[28px]">
+        <section className="flex flex-col tablet:flex-row gap-[32px] items-stretch mb-[56px]">
           <div className="flex flex-col justify-between gap-[36px] flex-1 min-w-0 w-full">
             <header className="flex flex-col gap-[18px]">
               <h1
@@ -82,7 +177,7 @@ export function HeadcountPlanner() {
 
         <FinancialInputsRow />
 
-        <section className="flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
+        <section className="mt-[16px] flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
           <ExpensesSidebar />
 
           <div className="flex-1 min-w-0">
@@ -92,6 +187,10 @@ export function HeadcountPlanner() {
                   key={idx}
                   monthIndex={idx}
                   balanceUsd={monthlyBalances[idx]}
+                  assignments={assignments[idx]}
+                  isDropTarget={drag?.armed && drag.dropTarget === idx}
+                  onRegister={registerMonth}
+                  onFlipDone={handleFlipDone}
                 />
               ))}
             </div>

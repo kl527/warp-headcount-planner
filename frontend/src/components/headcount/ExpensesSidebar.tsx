@@ -1,18 +1,12 @@
 import {
   AppWindow,
-  Briefcase,
   ChevronDown,
-  Code2,
-  Compass,
   Home,
-  LineChart,
   Megaphone,
-  PenTool,
   Plus,
-  Users,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ACCENT_SCALE,
   AMBER_SCALE,
@@ -22,10 +16,19 @@ import {
   RED_SCALE,
 } from '../../constants/design';
 import {
+  ROLE_SHORT_LABEL,
+  TEAM_FEATURED_ROLES,
+  TEAM_ICON,
+  TEAM_ICON_BG,
+  TEAM_LEAD_ROLE,
+  TEAM_ORDER,
+} from '../../constants/roleDisplay';
+import {
   useSalaryCatalog,
   type RoleFamily,
   type Team as SalaryTeam,
 } from '../../lib/salaryApi';
+import { useRoleDnd, type RoleCard } from './roleDnd';
 
 const SECTION_BLACK = '#000';
 
@@ -35,6 +38,7 @@ type ExpenseItem = {
   icon: LucideIcon;
   value: string;
   iconBg: string;
+  roleCard?: RoleCard;
 };
 
 const EXPENSE_ITEMS: ExpenseItem[] = [
@@ -67,82 +71,6 @@ const EXPENSE_ITEMS: ExpenseItem[] = [
     iconBg: GRAY_SCALE[6],
   },
 ];
-
-const TEAM_ICON_BG: Record<SalaryTeam, string> = {
-  Engineering: ACCENT_SCALE[6],
-  Product: GRAY_SCALE[7],
-  Design: AMBER_SCALE[6],
-  Data: ACCENT_SCALE[4],
-  GTM: RED_SCALE[6],
-  Ops: GRAY_SCALE[5],
-};
-
-const TEAM_ORDER: SalaryTeam[] = [
-  'Engineering',
-  'Product',
-  'Design',
-  'GTM',
-  'Ops',
-];
-
-const TEAM_ICON: Record<SalaryTeam, LucideIcon> = {
-  Engineering: Code2,
-  Product: Compass,
-  Design: PenTool,
-  Data: LineChart,
-  GTM: Briefcase,
-  Ops: Users,
-};
-
-// The "face" role for each team — the most indicative one, shown on top
-// of the collapsed stack regardless of pay. Anything not listed falls
-// back to descending max-p50 ordering.
-const TEAM_LEAD_ROLE: Record<SalaryTeam, string> = {
-  Engineering: 'software-engineer',
-  Product: 'product-manager',
-  Design: 'product-designer',
-  Data: 'data-scientist',
-  GTM: 'account-executive',
-  Ops: 'recruiter',
-};
-
-// Curated top roles per team — the ones a Series A–B startup hires first.
-// Anything outside this allowlist is filtered out of the sidebar; specialized
-// roles (Platform, Security, Brand/Content, Sales Manager, etc.) stay in the
-// salary catalog but don't clutter the stacks.
-const TEAM_FEATURED_ROLES: Record<SalaryTeam, Set<string>> = {
-  Engineering: new Set([
-    'software-engineer',
-    'ml-engineer',
-    'engineering-manager',
-  ]),
-  Product: new Set(['product-manager', 'group-product-manager']),
-  Design: new Set(['product-designer', 'design-manager']),
-  Data: new Set(['data-scientist', 'data-analyst', 'analytics-engineer']),
-  GTM: new Set(['account-executive', 'sdr', 'customer-success-manager']),
-  Ops: new Set(['recruiter', 'finance-ops', 'chief-of-staff']),
-};
-
-// Compact labels for the sidebar cards — keeps each row on one line at the
-// sidebar's ~220px width. Falls back to the catalog displayName if missing.
-const ROLE_SHORT_LABEL: Record<string, string> = {
-  'software-engineer': 'SWE',
-  'ml-engineer': 'ML Eng.',
-  'engineering-manager': 'Eng. Manager',
-  'product-manager': 'PM',
-  'group-product-manager': 'Group PM',
-  'product-designer': 'Designer',
-  'design-manager': 'Design Manager',
-  'data-scientist': 'Data Scientist',
-  'data-analyst': 'Data Analyst',
-  'analytics-engineer': 'Analytics Eng.',
-  'account-executive': 'Account Exec',
-  sdr: 'Sales Dev.',
-  'customer-success-manager': 'CS Manager',
-  recruiter: 'Recruiter',
-  'finance-ops': 'Finance Ops',
-  'chief-of-staff': 'Chief of Staff',
-};
 
 function maxP50(family: RoleFamily): number {
   let max = 0;
@@ -178,21 +106,21 @@ function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
       });
     return {
       team,
-      items: sorted.map((f) => ({
-        id: f.key,
-        label: ROLE_SHORT_LABEL[f.key] ?? f.displayName,
-        icon: TEAM_ICON[team],
-        value: monthlyValue(maxP50(f)),
-        iconBg: TEAM_ICON_BG[team],
-      })),
+      items: sorted.map((f) => {
+        const label = ROLE_SHORT_LABEL[f.key] ?? f.displayName;
+        return {
+          id: f.key,
+          label,
+          icon: TEAM_ICON[team],
+          value: monthlyValue(maxP50(f)),
+          iconBg: TEAM_ICON_BG[team],
+          roleCard: { roleKey: f.key, label, team },
+        };
+      }),
     };
   });
 }
 
-// Stacked-card layout, following the maon-expo home-page pattern:
-// absolute-positioned cards with a small "peek" per card behind the top,
-// max 3 visible in the collapsed state, a subtle scale falloff, tap to
-// spread into natural spacing.
 const CARD_HEIGHT = 51;
 const STACK_PEEK = 10;
 const STACK_GAP = 7;
@@ -215,9 +143,18 @@ function StackedTeamGroup({
     CARD_HEIGHT + STACK_PEEK * Math.max(0, visibleInStack - 1);
   const expandedH =
     total * CARD_HEIGHT + Math.max(0, total - 1) * STACK_GAP;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const hasInputFocusInside = () => {
+    const root = rootRef.current;
+    if (!root) return false;
+    const active = document.activeElement;
+    return active instanceof HTMLInputElement && root.contains(active);
+  };
 
   return (
     <div
+      ref={rootRef}
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
@@ -226,7 +163,9 @@ function StackedTeamGroup({
         if (e.pointerType === 'mouse') onSetExpanded(true);
       }}
       onPointerLeave={(e) => {
-        if (e.pointerType === 'mouse') onSetExpanded(false);
+        if (e.pointerType !== 'mouse') return;
+        if (hasInputFocusInside()) return;
+        onSetExpanded(false);
       }}
       onFocus={() => onSetExpanded(true)}
       onBlur={(e) => {
@@ -271,7 +210,7 @@ function StackedTeamGroup({
               pointerEvents: hiddenInStack ? 'none' : 'auto',
             }}
           >
-            <ExpenseRow item={item} />
+            <ExpenseRow item={item} draggable={expanded && !hiddenInStack} />
           </div>
         );
       })}
@@ -279,11 +218,60 @@ function StackedTeamGroup({
   );
 }
 
-function ExpenseRow({ item }: { item: ExpenseItem }) {
+function ExpenseRow({
+  item,
+  draggable,
+}: {
+  item: ExpenseItem;
+  draggable?: boolean;
+}) {
   const Icon = item.icon;
+  const dnd = useRoleDnd();
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const suppressClick = useRef(false);
+
+  const canDrag = Boolean(draggable && item.roleCard);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!canDrag || !item.roleCard) return;
+    // Only left mouse / primary touch.
+    if (e.button !== 0) return;
+    // Let the salary input handle its own pointer events.
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT') return;
+    const el = rowRef.current;
+    if (!el) return;
+    suppressClick.current = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMoveOnce = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) >= 4) {
+        suppressClick.current = true;
+      }
+    };
+    window.addEventListener('pointermove', onMoveOnce);
+    window.addEventListener(
+      'pointerup',
+      () => window.removeEventListener('pointermove', onMoveOnce),
+      { once: true },
+    );
+    dnd.beginDrag(item.roleCard, { kind: 'sidebar' }, e, el);
+  };
+
+  const handleClickCapture = (e: React.MouseEvent) => {
+    if (suppressClick.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      suppressClick.current = false;
+    }
+  };
+
   return (
     <div
+      ref={rowRef}
       className="flex items-center"
+      onPointerDown={handlePointerDown}
+      onClickCapture={handleClickCapture}
       style={{
         width: '100%',
         height: 51,
@@ -293,6 +281,9 @@ function ExpenseRow({ item }: { item: ExpenseItem }) {
         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
         padding: '10px',
         gap: 11,
+        cursor: canDrag ? 'grab' : undefined,
+        touchAction: canDrag ? 'none' : undefined,
+        userSelect: 'none',
       }}
     >
       <div
@@ -349,6 +340,7 @@ function ExpenseRow({ item }: { item: ExpenseItem }) {
           aria-label={`${item.label} cost`}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           style={{
             flex: 1,

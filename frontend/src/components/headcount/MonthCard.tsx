@@ -1,9 +1,15 @@
+import { useEffect, useRef } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { MONTH_LABELS } from '../../data/headcount';
+import { RolePill, type MonthAssignment } from './RolePill';
 
 interface MonthCardProps {
   monthIndex: number;
   balanceUsd?: number;
+  assignments?: MonthAssignment[];
+  isDropTarget?: boolean;
+  onRegister?: (index: number, el: HTMLElement | null) => void;
+  onFlipDone?: (assignmentId: string) => void;
 }
 
 function fmtBalance(n: number): string {
@@ -14,9 +20,25 @@ function fmtBalance(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export function MonthCard({ monthIndex, balanceUsd }: MonthCardProps) {
+export function MonthCard({
+  monthIndex,
+  balanceUsd,
+  assignments,
+  isDropTarget,
+  onRegister,
+  onFlipDone,
+}: MonthCardProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!onRegister) return;
+    onRegister(monthIndex, ref.current);
+    return () => onRegister(monthIndex, null);
+  }, [monthIndex, onRegister]);
+
   return (
     <div
+      ref={ref}
       className="min-h-[120px] tablet:min-h-[190px] laptop:min-h-[220px]"
       style={{
         background: '#fff',
@@ -26,7 +48,10 @@ export function MonthCard({ monthIndex, balanceUsd }: MonthCardProps) {
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+        boxShadow: isDropTarget
+          ? '0 0 0 1.5px var(--color-accent-9), 0 6px 14px rgba(0, 0, 0, 0.08)'
+          : '0 2px 4px rgba(0, 0, 0, 0.05)',
+        transition: 'box-shadow 160ms ease',
       }}
     >
       <div
@@ -55,6 +80,19 @@ export function MonthCard({ monthIndex, balanceUsd }: MonthCardProps) {
       >
         monthly expenses.
       </div>
+
+      {assignments && assignments.length > 0 && (
+        <div className="flex flex-col gap-[4px]">
+          {assignments.map((a) => (
+            <RolePill
+              key={a.id}
+              assignment={a}
+              monthIndex={monthIndex}
+              onFlipDone={onFlipDone}
+            />
+          ))}
+        </div>
+      )}
 
       {balanceUsd !== undefined && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
