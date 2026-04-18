@@ -123,6 +123,27 @@ const TEAM_FEATURED_ROLES: Record<SalaryTeam, Set<string>> = {
   Ops: new Set(['recruiter', 'finance-ops', 'chief-of-staff']),
 };
 
+// Compact labels for the sidebar cards — keeps each row on one line at the
+// sidebar's ~220px width. Falls back to the catalog displayName if missing.
+const ROLE_SHORT_LABEL: Record<string, string> = {
+  'software-engineer': 'SWE',
+  'ml-engineer': 'ML Eng.',
+  'engineering-manager': 'Eng. Manager',
+  'product-manager': 'PM',
+  'group-product-manager': 'Group PM',
+  'product-designer': 'Designer',
+  'design-manager': 'Design Manager',
+  'data-scientist': 'Data Scientist',
+  'data-analyst': 'Data Analyst',
+  'analytics-engineer': 'Analytics Eng.',
+  'account-executive': 'Account Exec',
+  sdr: 'Sales Dev.',
+  'customer-success-manager': 'CS Manager',
+  recruiter: 'Recruiter',
+  'finance-ops': 'Finance Ops',
+  'chief-of-staff': 'Chief of Staff',
+};
+
 function maxP50(family: RoleFamily): number {
   let max = 0;
   for (const band of Object.values(family.levels)) {
@@ -159,7 +180,7 @@ function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
       team,
       items: sorted.map((f) => ({
         id: f.key,
-        label: f.displayName,
+        label: ROLE_SHORT_LABEL[f.key] ?? f.displayName,
         icon: TEAM_ICON[team],
         value: monthlyValue(maxP50(f)),
         iconBg: TEAM_ICON_BG[team],

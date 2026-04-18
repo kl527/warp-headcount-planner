@@ -3,11 +3,10 @@ import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 export function DropZone() {
   return (
     <div
-      className="flex flex-col items-center justify-center"
+      className="flex flex-col items-center justify-center max-w-[240px] tablet:max-w-[200px] laptop:max-w-[240px]"
       style={{
         width: '100%',
-        maxWidth: 359,
-        height: 73,
+        aspectRatio: '1.6 / 1',
         background: '#f9f9f9',
         border: '0.5px solid #f9f9f9',
         borderRadius: RADIUS.lg,
