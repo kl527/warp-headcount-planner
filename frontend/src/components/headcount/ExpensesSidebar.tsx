@@ -106,6 +106,23 @@ const TEAM_LEAD_ROLE: Record<SalaryTeam, string> = {
   Ops: 'recruiter',
 };
 
+// Curated top roles per team — the ones a Series A–B startup hires first.
+// Anything outside this allowlist is filtered out of the sidebar; specialized
+// roles (Platform, Security, Brand/Content, Sales Manager, etc.) stay in the
+// salary catalog but don't clutter the stacks.
+const TEAM_FEATURED_ROLES: Record<SalaryTeam, Set<string>> = {
+  Engineering: new Set([
+    'software-engineer',
+    'ml-engineer',
+    'engineering-manager',
+  ]),
+  Product: new Set(['product-manager', 'group-product-manager']),
+  Design: new Set(['product-designer', 'design-manager']),
+  Data: new Set(['data-scientist', 'data-analyst', 'analytics-engineer']),
+  GTM: new Set(['account-executive', 'sdr', 'customer-success-manager']),
+  Ops: new Set(['recruiter', 'finance-ops', 'chief-of-staff']),
+};
+
 function maxP50(family: RoleFamily): number {
   let max = 0;
   for (const band of Object.values(family.levels)) {
@@ -123,6 +140,7 @@ type TeamGroup = { team: SalaryTeam; items: ExpenseItem[] };
 function familiesToTeamGroups(families: RoleFamily[]): TeamGroup[] {
   const byTeam = new Map<SalaryTeam, RoleFamily[]>();
   for (const f of families) {
+    if (!TEAM_FEATURED_ROLES[f.team].has(f.key)) continue;
     const arr = byTeam.get(f.team) ?? [];
     arr.push(f);
     byTeam.set(f.team, arr);
@@ -159,8 +177,17 @@ const STACK_PEEK = 10;
 const STACK_GAP = 7;
 const MAX_VISIBLE_STACK = 3;
 
-function StackedTeamGroup({ items }: { items: ExpenseItem[] }) {
-  const [expanded, setExpanded] = useState(false);
+function StackedTeamGroup({
+  items,
+  expanded,
+  onToggle,
+  onSetExpanded,
+}: {
+  items: ExpenseItem[];
+  expanded: boolean;
+  onToggle: () => void;
+  onSetExpanded: (next: boolean) => void;
+}) {
   const total = items.length;
   const visibleInStack = Math.min(MAX_VISIBLE_STACK, total);
   const collapsedH =
@@ -173,25 +200,29 @@ function StackedTeamGroup({ items }: { items: ExpenseItem[] }) {
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
-      onClick={() => setExpanded((v) => !v)}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-      onFocus={() => setExpanded(true)}
+      onClick={onToggle}
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') onSetExpanded(true);
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType === 'mouse') onSetExpanded(false);
+      }}
+      onFocus={() => onSetExpanded(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setExpanded(false);
+          onSetExpanded(false);
         }
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          setExpanded((v) => !v);
+          onToggle();
         }
       }}
       style={{
         position: 'relative',
         height: expanded ? expandedH : collapsedH,
-        transition: 'height 300ms ease',
+        transition: 'height 450ms ease',
         cursor: 'pointer',
       }}
     >
@@ -215,7 +246,7 @@ function StackedTeamGroup({ items }: { items: ExpenseItem[] }) {
               zIndex: total - i,
               opacity: hiddenInStack ? 0 : 1,
               transition:
-                'top 300ms ease, transform 300ms ease, opacity 200ms ease',
+                'top 450ms ease, transform 450ms ease, opacity 300ms ease',
               pointerEvents: hiddenInStack ? 'none' : 'auto',
             }}
           >
@@ -365,6 +396,7 @@ export function ExpensesSidebar() {
       : [];
   const [expensesCollapsed, setExpensesCollapsed] = useState(false);
   const [teamCollapsed, setTeamCollapsed] = useState(false);
+  const [activeTeam, setActiveTeam] = useState<SalaryTeam | null>(null);
 
   return (
     <aside
@@ -401,7 +433,20 @@ export function ExpensesSidebar() {
       {!teamCollapsed && (
         <div className="flex flex-col gap-[14px]">
           {teamGroups.map((g) => (
-            <StackedTeamGroup key={g.team} items={g.items} />
+            <StackedTeamGroup
+              key={g.team}
+              items={g.items}
+              expanded={activeTeam === g.team}
+              onToggle={() =>
+                setActiveTeam((cur) => (cur === g.team ? null : g.team))
+              }
+              onSetExpanded={(next) =>
+                setActiveTeam((cur) => {
+                  if (next) return g.team;
+                  return cur === g.team ? null : cur;
+                })
+              }
+            />
           ))}
         </div>
       )}
