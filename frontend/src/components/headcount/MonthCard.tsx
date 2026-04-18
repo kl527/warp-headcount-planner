@@ -1,16 +1,24 @@
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
-import { MONTH_LABELS, TEAM_COLOR, type Hire } from '../../data/headcount';
+import { MONTH_LABELS } from '../../data/headcount';
 
 interface MonthCardProps {
   monthIndex: number;
-  hires: Hire[];
+  balanceUsd?: number;
 }
 
-export function MonthCard({ monthIndex, hires }: MonthCardProps) {
+function fmtBalance(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n <= -1_000_000) return `-$${(-n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+  if (n <= -1_000) return `-$${Math.round(-n / 1_000)}K`;
+  return `$${Math.round(n)}`;
+}
+
+export function MonthCard({ monthIndex, balanceUsd }: MonthCardProps) {
   return (
     <div
+      className="min-h-[120px] tablet:min-h-[190px] laptop:min-h-[220px]"
       style={{
-        minHeight: 200,
         background: '#fff',
         border: '0.5px solid #f9f9f9',
         borderRadius: RADIUS.lg,
@@ -32,30 +40,42 @@ export function MonthCard({ monthIndex, hires }: MonthCardProps) {
         {MONTH_LABELS[monthIndex]}
       </div>
 
-      {hires.length > 0 && (
-        <div className="flex flex-col gap-[3px] min-w-0">
-          {hires.map((h) => {
-            const tone = TEAM_COLOR[h.team];
-            return (
-              <div
-                key={h.id}
-                className="truncate"
-                title={h.role}
-                style={{
-                  fontFamily: FONT_FAMILIES.sans,
-                  fontSize: 10,
-                  lineHeight: '14px',
-                  fontWeight: 500,
-                  color: tone.fg,
-                  background: tone.bg,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                }}
-              >
-                {h.role}
-              </div>
-            );
-          })}
+      <div
+        className="truncate"
+        style={{
+          fontFamily: FONT_FAMILIES.sans,
+          fontSize: 10,
+          lineHeight: '14px',
+          fontWeight: 500,
+          color: 'rgba(0, 0, 0, 0.72)',
+          background: '#f2f2f2',
+          padding: '2px 6px',
+          borderRadius: 4,
+        }}
+      >
+        monthly expenses.
+      </div>
+
+      {balanceUsd !== undefined && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#f5fcf3',
+              borderRadius: 20,
+              height: 30,
+              padding: '0 14px',
+              fontFamily: FONT_FAMILIES.sans,
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#008500',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {fmtBalance(balanceUsd)}
+          </span>
         </div>
       )}
     </div>

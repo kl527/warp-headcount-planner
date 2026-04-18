@@ -2,9 +2,8 @@ import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
 import {
   HIRES,
   PLAN_YEAR,
-  hiresForMonth,
   hiresForYear,
-  monthKey,
+  type Hire,
 } from '../../data/headcount';
 import { DropZone } from './DropZone';
 import { ExpensesSidebar } from './ExpensesSidebar';
@@ -12,8 +11,27 @@ import { FinancialInputsRow } from './FinancialInputsRow';
 import { MonthCard } from './MonthCard';
 import { RunwayCard } from './RunwayCard';
 
+const STARTING_CASH = 2_000_000;
+const BASELINE_MONTHLY_BURN = 30_000;
+
+function computeMonthlyBalances(yearHires: Hire[]): number[] {
+  const balances: number[] = [];
+  let cash = STARTING_CASH;
+  for (let m = 0; m < 12; m++) {
+    balances.push(cash);
+    let hireBurn = 0;
+    for (const h of yearHires) {
+      const startIdx = parseInt(h.startMonth.split('-')[1], 10) - 1;
+      if (startIdx <= m) hireBurn += h.estCostUsd / 12;
+    }
+    cash -= BASELINE_MONTHLY_BURN + hireBurn;
+  }
+  return balances;
+}
+
 export function HeadcountPlanner() {
   const yearHires = hiresForYear(HIRES, PLAN_YEAR);
+  const monthlyBalances = computeMonthlyBalances(yearHires);
 
   return (
     <div className="min-h-svh">
@@ -73,7 +91,7 @@ export function HeadcountPlanner() {
                 <MonthCard
                   key={idx}
                   monthIndex={idx}
-                  hires={hiresForMonth(yearHires, monthKey(PLAN_YEAR, idx))}
+                  balanceUsd={monthlyBalances[idx]}
                 />
               ))}
             </div>

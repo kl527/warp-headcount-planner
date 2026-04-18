@@ -66,7 +66,7 @@ function LabeledMoneyInput({
 
 export function FinancialInputsRow() {
   return (
-    <div className="grid grid-cols-1 tablet:grid-cols-3 gap-[16px] tablet:gap-[30px]">
+    <div className="grid grid-cols-1 tablet:grid-cols-3 gap-[16px] tablet:gap-[14px] laptop:gap-[30px]">
       <LabeledMoneyInput label="Company Balance" value="1,000,000" prefix="$" />
       <LabeledMoneyInput label="MRR" value="150,000" prefix="$" />
       <LabeledMoneyInput label="MoM Growth" value="20" prefix="%" />
