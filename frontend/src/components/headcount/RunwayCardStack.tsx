@@ -19,7 +19,7 @@ interface RunwayCardStackProps {
   baseYear: number;
 }
 
-const CARD_HEIGHT = 260;
+const CARD_HEIGHT = 200;
 const STACK_PEEK = 10;
 const TILT_PER_DEPTH = 1.8; // degrees
 const SCALE_PER_DEPTH = 0.025;
@@ -102,7 +102,7 @@ function ChartFace({
       }}
     >
       <Chip icon={card.icon} text={card.headerText} />
-      <div style={{ flex: 1, minHeight: 170 }}>
+      <div style={{ flex: 1, minHeight: 120 }}>
         <RunwayChart
           balances={card.balances}
           assignments={assignments}

@@ -13,7 +13,6 @@ import {
 } from '../../lib/salaryApi';
 import { useResolvedLocation } from '../../lib/geoApi';
 import { DragGhost } from './DragGhost';
-import { DropZone } from './DropZone';
 import {
   ExpensesSidebar,
   type MonthlyExpenseValues,
@@ -46,6 +45,38 @@ import {
 import { YearCard } from './YearCard';
 
 const BASE_YEAR = 2026;
+
+const SHUFFLE_WORDS = ['Runway', 'Headcount'] as const;
+
+function ShuffleWord() {
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIndex((i) => (i + 1) % SHUFFLE_WORDS.length);
+        setVisible(true);
+      }, 220);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <span
+      style={{
+        fontWeight: 700,
+        display: 'inline-block',
+        transition: 'opacity 220ms ease, transform 220ms ease',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(-8px)',
+      }}
+    >
+      {SHUFFLE_WORDS[index]}
+    </span>
+  );
+}
 
 function defaultMonthlyExpenses(): MonthlyExpenseValues {
   return {
@@ -426,7 +457,7 @@ function PlannerInner() {
         }}
       >
         <section className="flex flex-col tablet:flex-row gap-[32px] items-stretch mb-[56px]">
-          <div className="flex flex-col justify-between gap-[36px] flex-1 min-w-0 w-full">
+          <div className="flex flex-col justify-start gap-[36px] flex-1 min-w-0 w-full">
             <header className="flex flex-col gap-[18px]">
               <h1
                 style={{
@@ -438,8 +469,10 @@ function PlannerInner() {
                   margin: 0,
                 }}
               >
-                Understand your{' '}
-                <span style={{ fontWeight: 700 }}>Runway</span>
+                Understand your
+                <br />
+                <ShuffleWord />
+
               </h1>
               <p
                 style={{
@@ -451,14 +484,13 @@ function PlannerInner() {
                   margin: 0,
                 }}
               >
-                drag &amp; drop your excel sheet or type in your company
-                financials and we&rsquo;ll give you an accurate runway
+                plan your hires month by month, enter your financials, and
+                see exactly how each role shifts your runway
               </p>
             </header>
-            <DropZone />
           </div>
 
-          <div className="w-full tablet:w-[340px] laptop:w-[400px] xl:w-[466px] tablet:flex-shrink-0">
+          <div className="w-full tablet:w-[360px] laptop:w-[440px] xl:w-[520px] tablet:flex-shrink-0">
             <RunwayCard
               runwayMonths={runwayMonths}
               balances={monthlyBalances}

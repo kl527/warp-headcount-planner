@@ -84,7 +84,7 @@ export function RunwayCard({
     <div
       style={{
         width: '100%',
-        maxWidth: 466,
+        maxWidth: 520,
         background: '#f9f9f9',
         border: '0.5px solid #f9f9f9',
         borderRadius: RADIUS.lg,
