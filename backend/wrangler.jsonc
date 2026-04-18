@@ -6,5 +6,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "warp-headcount-planner",
+      "database_id": "796283d0-b5b1-4b80-b2e0-31c0cbdc60e1",
+      "migrations_dir": "migrations"
+    }
+  ]
 }

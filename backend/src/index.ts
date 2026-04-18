@@ -43,7 +43,11 @@ function isScenarioShape(value: unknown): value is StoredScenario {
   );
 }
 
-export interface Env {}
+export interface Env {
+  DB: D1Database;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -154,6 +158,36 @@ app.post("/scenarios", async (c) => {
   const code = shortCode();
   store.set(code, body);
   return c.json({ id: body.id, shortCode: code });
+});
+
+app.post("/share-emails", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (typeof body !== "object" || body === null) {
+    return c.json({ error: "invalid_body" }, 400);
+  }
+  const { email, shareUrl } = body as { email?: unknown; shareUrl?: unknown };
+  if (typeof email !== "string" || !EMAIL_RE.test(email.trim())) {
+    return c.json({ error: "invalid_email" }, 400);
+  }
+  const normalized = email.trim().toLowerCase();
+  const url = typeof shareUrl === "string" ? shareUrl : null;
+
+  try {
+    await c.env.DB.prepare(
+      "INSERT INTO share_emails (email, share_url) VALUES (?, ?)",
+    )
+      .bind(normalized, url)
+      .run();
+  } catch (err) {
+    console.error("[share-emails] insert failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
+  return c.json({ ok: true });
 });
 
 app.get("/scenarios/:shortCode", (c) => {
