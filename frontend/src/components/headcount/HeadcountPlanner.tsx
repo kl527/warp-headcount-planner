@@ -1,7 +1,12 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  PanelLeftOpen,
+  PanelRightOpen,
+} from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useState } from 'react';
-import { FONT_FAMILIES, PAGE_WIDTH } from '../../constants/design';
+import { FONT_FAMILIES, PAGE_WIDTH, RADIUS } from '../../constants/design';
 import {
   useSalaryCatalog,
   type LocationKey,
@@ -21,6 +26,7 @@ import {
 import { MonthCard } from './MonthCard';
 import { type MonthAssignment } from './RolePill';
 import { RunwayCard } from './RunwayCard';
+import { RunwayPanel } from './RunwayPanel';
 import { RoleDndProvider } from './RoleDndProvider';
 import { useRoleDnd, type DropResult } from './roleDnd';
 import { type View } from './ViewToggle';
@@ -125,7 +131,7 @@ function PlannerInner() {
   const [financials, setFinancials] = useState<FinancialInputs>({
     companyBalance: 1_000_000,
     mrr: 150_000,
-    momGrowthPct: 20,
+    momGrowthPct: 7,
   });
   const [expenseValues, setExpenseValues] = useState<MonthlyExpenseValues>(
     defaultMonthlyExpenses,
@@ -364,7 +370,12 @@ function PlannerInner() {
           </div>
 
           <div className="w-full tablet:w-[340px] laptop:w-[400px] xl:w-[466px] tablet:flex-shrink-0">
-            <RunwayCard runwayMonths={runwayMonths} />
+            <RunwayCard
+              runwayMonths={runwayMonths}
+              balances={monthlyBalances}
+              assignments={assignments}
+              baseYear={baseYear}
+            />
           </div>
         </section>
 
@@ -376,18 +387,44 @@ function PlannerInner() {
         />
 
         <section className="mt-[16px] flex flex-row gap-[10px] laptop:gap-[21px] items-stretch">
-          <ExpensesSidebar
-            expenseValues={expenseValues}
-            onExpenseChange={handleExpenseChange}
-            view={view}
-            selectedLocation={selectedLocation}
-            onLocationChange={handleLocationChange}
-            roleSalaryOverrides={roleSalaryOverrides}
-            onRoleSalaryChange={handleRoleSalaryChange}
+          <EdgeTab
+            active={view === 'runway'}
+            side="left"
+            label="Costs"
+            icon={<PanelLeftOpen size={14} strokeWidth={2} />}
+            onClick={() => setView('month')}
           />
 
+          <AnimatedSlot active={view !== 'runway'} from="left">
+            <ExpensesSidebar
+              expenseValues={expenseValues}
+              onExpenseChange={handleExpenseChange}
+              view={view}
+              selectedLocation={selectedLocation}
+              onLocationChange={handleLocationChange}
+              roleSalaryOverrides={roleSalaryOverrides}
+              onRoleSalaryChange={handleRoleSalaryChange}
+            />
+          </AnimatedSlot>
+
           <div className="flex-1 min-w-0 flex flex-col gap-[14px]">
-            {view === 'month' ? (
+            {view === 'year' ? (
+              <div className="flex flex-col gap-[14px]">
+                {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
+                  <YearCard
+                    key={y}
+                    yearIndex={y}
+                    year={baseYear + y}
+                    balanceUsd={yearlyBalances[y]}
+                    assignments={yearAssignments[y]}
+                    isDropTarget={drag?.armed && drag.dropTarget === y}
+                    onRegister={registerMonth}
+                    onFlipDone={handleFlipDone}
+                    onSelect={handleYearSelect}
+                  />
+                ))}
+              </div>
+            ) : (
               <>
                 <YearStepper
                   year={baseYear + focusedYear}
@@ -415,26 +452,163 @@ function PlannerInner() {
                   })}
                 </div>
               </>
-            ) : (
-              <div className="flex flex-col gap-[14px]">
-                {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
-                  <YearCard
-                    key={y}
-                    yearIndex={y}
-                    year={baseYear + y}
-                    balanceUsd={yearlyBalances[y]}
-                    assignments={yearAssignments[y]}
-                    isDropTarget={drag?.armed && drag.dropTarget === y}
-                    onRegister={registerMonth}
-                    onFlipDone={handleFlipDone}
-                    onSelect={handleYearSelect}
-                  />
-                ))}
-              </div>
             )}
           </div>
+
+          <AnimatedSlot active={view === 'runway'} from="right">
+            <RunwayPanel
+              runwayMonths={runwayMonths}
+              balances={monthlyBalances}
+              assignments={assignments}
+              baseYear={baseYear}
+              focusedYearIndex={focusedYear}
+            />
+          </AnimatedSlot>
+
+          <EdgeTab
+            active={view !== 'runway'}
+            side="right"
+            label="Runway"
+            icon={<PanelRightOpen size={14} strokeWidth={2} />}
+            onClick={() => setView('runway')}
+          />
         </section>
       </main>
+    </div>
+  );
+}
+
+const SLOT_WIDTH = 318;
+const SLOT_DURATION_MS = 420;
+// No-overshoot ease — keeps sibling widths monotonic so the flex-1 middle
+// doesn't oscillate during a mode swap. Matches the ViewToggle pill ease.
+const SLOT_SPRING = 'cubic-bezier(0.32, 0.72, 0, 1)';
+
+function AnimatedSlot({
+  active,
+  from,
+  children,
+}: {
+  active: boolean;
+  from: 'left' | 'right';
+  children: React.ReactNode;
+}) {
+  // Always rendered — lets both sides transition synchronously without the
+  // extra rAF delay that mount-on-demand would introduce.
+  const offset = from === 'left' ? -18 : 18;
+
+  return (
+    <div
+      className="flex-shrink-0"
+      aria-hidden={!active}
+      style={{
+        width: active ? SLOT_WIDTH : 0,
+        minWidth: 0,
+        overflow: 'hidden',
+        pointerEvents: active ? 'auto' : 'none',
+        transition: `width ${SLOT_DURATION_MS}ms ${SLOT_SPRING}`,
+      }}
+    >
+      <div
+        style={{
+          width: SLOT_WIDTH,
+          transform: active ? 'translateX(0)' : `translateX(${offset}px)`,
+          opacity: active ? 1 : 0,
+          transition: `transform ${SLOT_DURATION_MS}ms ${SLOT_SPRING}, opacity 220ms ease-out`,
+          willChange: 'transform, opacity',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const EDGE_TAB_WIDTH = 28;
+
+function EdgeTab({
+  active,
+  side,
+  label,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  side: 'left' | 'right';
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  const offset = side === 'left' ? -18 : 18;
+  const radius = side === 'left'
+    ? `0 ${RADIUS.lg} ${RADIUS.lg} 0`
+    : `${RADIUS.lg} 0 0 ${RADIUS.lg}`;
+
+  return (
+    <div
+      className="flex-shrink-0 self-stretch"
+      style={{
+        width: active ? EDGE_TAB_WIDTH : 0,
+        minWidth: 0,
+        overflow: 'hidden',
+        pointerEvents: active ? 'auto' : 'none',
+        transition: `width ${SLOT_DURATION_MS}ms ${SLOT_SPRING}`,
+        display: 'flex',
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Open ${label}`}
+        title={`Open ${label}`}
+        style={{
+          width: EDGE_TAB_WIDTH,
+          minHeight: 120,
+          alignSelf: 'center',
+          background: '#f9f9f9',
+          border: '0.5px solid #f0f0f0',
+          borderLeftWidth: side === 'left' ? 0 : 0.5,
+          borderRightWidth: side === 'right' ? 0 : 0.5,
+          borderRadius: radius,
+          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
+          padding: '12px 0',
+          cursor: 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          color: '#3a3a3a',
+          transform: active ? 'translateX(0)' : `translateX(${offset}px)`,
+          opacity: active ? 1 : 0,
+          transition: `transform ${SLOT_DURATION_MS}ms ${SLOT_SPRING}, opacity 220ms ease-out, background 160ms ease, color 160ms ease`,
+          willChange: 'transform, opacity',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#f1f1f1';
+          e.currentTarget.style.color = '#000';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#f9f9f9';
+          e.currentTarget.style.color = '#3a3a3a';
+        }}
+      >
+        <span style={{ display: 'inline-flex' }}>{icon}</span>
+        <span
+          style={{
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+            fontFamily: FONT_FAMILIES.sans,
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'inherit',
+          }}
+        >
+          {label}
+        </span>
+      </button>
     </div>
   );
 }

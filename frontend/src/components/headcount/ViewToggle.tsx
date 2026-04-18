@@ -1,6 +1,6 @@
 import { FONT_FAMILIES, SHADOWS } from '../../constants/design';
 
-export type View = 'year' | 'month';
+export type View = 'year' | 'month' | 'runway';
 
 interface ViewToggleProps {
   value: View;
@@ -10,10 +10,12 @@ interface ViewToggleProps {
 const OPTIONS: { value: View; label: string }[] = [
   { value: 'year', label: 'Yearly' },
   { value: 'month', label: 'Monthly' },
+  { value: 'runway', label: 'Runway' },
 ];
 
 export function ViewToggle({ value, onChange }: ViewToggleProps) {
   const activeIndex = OPTIONS.findIndex((o) => o.value === value);
+  const pct = 100 / OPTIONS.length;
 
   return (
     <div
@@ -36,7 +38,7 @@ export function ViewToggle({ value, onChange }: ViewToggleProps) {
           top: 3,
           bottom: 3,
           left: 3,
-          width: 'calc(50% - 3px)',
+          width: `calc(${pct}% - 2px)`,
           background: 'var(--color-card)',
           borderRadius: 11,
           boxShadow: SHADOWS.border,
