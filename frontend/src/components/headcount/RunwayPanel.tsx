@@ -1,4 +1,5 @@
 import { CalendarRange, TrendingDown } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import type { FinancialInputs } from './FinancialInputsRow';
 import type { MonthAssignment } from './RolePill';
@@ -15,6 +16,11 @@ interface RunwayPanelProps {
   focusedYearIndex: number;
   financials: FinancialInputs;
 }
+
+const CHART_CARD_HEIGHT = 200;
+const STACK_PEEK = 14;
+const STACK_GAP = 14;
+const MAX_VISIBLE_STACK = 2;
 
 function ChartHeader({
   icon,
@@ -46,6 +52,112 @@ function ChartHeader({
       </span>
       {text}
     </span>
+  );
+}
+
+function StackedChartCards({ items }: { items: ReactNode[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const total = items.length;
+  const visibleInStack = Math.min(MAX_VISIBLE_STACK, total);
+  const collapsedH =
+    CHART_CARD_HEIGHT + STACK_PEEK * Math.max(0, visibleInStack - 1);
+  const expandedH =
+    total * CHART_CARD_HEIGHT + Math.max(0, total - 1) * STACK_GAP;
+
+  return (
+    <div
+      ref={rootRef}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Collapse runway charts' : 'Expand runway charts'}
+      onClick={() => setExpanded((v) => !v)}
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') setExpanded(true);
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType !== 'mouse') return;
+        setExpanded(false);
+      }}
+      onFocus={() => setExpanded(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setExpanded(false);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setExpanded((v) => !v);
+        }
+      }}
+      style={{
+        position: 'relative',
+        height: expanded ? expandedH : collapsedH,
+        transition: 'height 450ms ease',
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+    >
+      {items.map((item, i) => {
+        const clampedPos = Math.min(i, MAX_VISIBLE_STACK - 1);
+        const collapsedTop = clampedPos * STACK_PEEK;
+        const expandedTop = i * (CHART_CARD_HEIGHT + STACK_GAP);
+        const top = expanded ? expandedTop : collapsedTop;
+        const scale = expanded ? 1 : 1 - clampedPos * 0.02;
+        const hiddenInStack = !expanded && i >= MAX_VISIBLE_STACK;
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              top,
+              left: 0,
+              right: 0,
+              height: CHART_CARD_HEIGHT,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top center',
+              zIndex: total - i,
+              opacity: hiddenInStack ? 0 : 1,
+              transition:
+                'top 450ms ease, transform 450ms ease, opacity 300ms ease',
+              pointerEvents: hiddenInStack ? 'none' : 'auto',
+            }}
+          >
+            {item}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChartCard({
+  header,
+  children,
+}: {
+  header: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        height: '100%',
+        background: '#fff',
+        border: '0.5px solid #f9f9f9',
+        borderRadius: RADIUS.lg,
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+        padding: '14px 14px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        boxSizing: 'border-box',
+      }}
+    >
+      {header}
+      <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+    </div>
   );
 }
 
@@ -96,65 +208,48 @@ export function RunwayPanel({
         baseYear={baseYear}
       />
 
-      <div
-        style={{
-          background: '#fff',
-          border: '0.5px solid #f9f9f9',
-          borderRadius: RADIUS.lg,
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-          padding: '14px 14px 10px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          minHeight: 170,
-        }}
-      >
-        <ChartHeader
-          icon={<TrendingDown size={11} strokeWidth={2.2} />}
-          text={`${baseYear}–${lastYear} cash runway`}
-        />
-        <div style={{ flex: 1, minHeight: 140 }}>
-          <RunwayChart
-            balances={balances}
-            assignments={assignments}
-            baseYear={baseYear}
-            startMonthIndex={0}
-            xTickMode="year"
-            showYAxis
-            minHeight={140}
-          />
-        </div>
-      </div>
-
-      <div
-        style={{
-          background: '#fff',
-          border: '0.5px solid #f9f9f9',
-          borderRadius: RADIUS.lg,
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-          padding: '14px 14px 10px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          minHeight: 160,
-        }}
-      >
-        <ChartHeader
-          icon={<CalendarRange size={11} strokeWidth={2.2} />}
-          text={`${focusYear} monthly cash`}
-        />
-        <div style={{ flex: 1, minHeight: 130 }}>
-          <RunwayChart
-            balances={focusBalances}
-            assignments={assignments}
-            baseYear={baseYear}
-            startMonthIndex={focusStart}
-            xTickMode="month"
-            showYAxis
-            minHeight={130}
-          />
-        </div>
-      </div>
+      <StackedChartCards
+        items={[
+          <ChartCard
+            key="horizon"
+            header={
+              <ChartHeader
+                icon={<TrendingDown size={11} strokeWidth={2.2} />}
+                text={`${baseYear}–${lastYear} cash runway`}
+              />
+            }
+          >
+            <RunwayChart
+              balances={balances}
+              assignments={assignments}
+              baseYear={baseYear}
+              startMonthIndex={0}
+              xTickMode="year"
+              showYAxis
+              minHeight={140}
+            />
+          </ChartCard>,
+          <ChartCard
+            key="focus"
+            header={
+              <ChartHeader
+                icon={<CalendarRange size={11} strokeWidth={2.2} />}
+                text={`${focusYear} monthly cash`}
+              />
+            }
+          >
+            <RunwayChart
+              balances={focusBalances}
+              assignments={assignments}
+              baseYear={baseYear}
+              startMonthIndex={focusStart}
+              xTickMode="month"
+              showYAxis
+              minHeight={140}
+            />
+          </ChartCard>,
+        ]}
+      />
 
       <RunwayInsightCard
         companyBalance={financials.companyBalance}
