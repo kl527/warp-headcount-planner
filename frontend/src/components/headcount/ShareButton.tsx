@@ -101,7 +101,7 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
   const handleOpen = () => {
     if (mode === 'idle') {
       setMode('input');
-      track.shareButtonClicked();
+      track.shareDeckOpened();
     }
   };
 

@@ -116,8 +116,8 @@ export const track = {
   scenarioReverted: () => capture('scenario_reverted'),
   scenarioSaved: (p: { scenario_name: string }) =>
     capture('scenario_saved', { funnel_step: FUNNEL_STEP.scenarioSaved, ...p }),
-  shareButtonClicked: () =>
-    capture('share_button_clicked', {
+  shareDeckOpened: () =>
+    capture('share_deck_opened', {
       funnel_step: FUNNEL_STEP.shareButtonClicked,
     }),
   emailInputFocused: () =>
