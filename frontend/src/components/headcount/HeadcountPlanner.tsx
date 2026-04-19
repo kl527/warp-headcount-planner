@@ -43,7 +43,7 @@ import {
   type ShareableState,
 } from '../../lib/shareState';
 import { YearCard } from './YearCard';
-import { posthog } from '../../lib/posthog';
+import { track } from '../../lib/analytics';
 
 const BASE_YEAR = 2026;
 
@@ -140,7 +140,7 @@ function PlannerInner() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (!params.has('state')) return;
-    posthog.capture('share_link_opened');
+    track.shareLinkOpened();
     params.delete('state');
     const qs = params.toString();
     const next =
@@ -153,7 +153,7 @@ function PlannerInner() {
   const handleYearSelect = useCallback((yearIndex: number) => {
     setFocusedYear(yearIndex);
     setView('month');
-    posthog.capture('view_changed', { view: 'month', trigger: 'year_select' });
+    track.viewChanged({ view: 'month', trigger: 'year_select' });
   }, []);
 
   const stepYear = (delta: number) => {
@@ -175,7 +175,8 @@ function PlannerInner() {
 
   const handleLocationChange = useCallback((next: LocationKey) => {
     setManualLocation(next);
-    posthog.capture('location_changed', { location: next });
+    track.firstInteraction('location_changed');
+    track.locationChanged({ location: next });
   }, []);
 
   const handleRoleSalaryChange = useCallback(
@@ -229,7 +230,8 @@ function PlannerInner() {
   const handleFinancialsChange = useCallback(
     (patch: Partial<FinancialInputs>) => {
       setFinancials((prev) => ({ ...prev, ...patch }));
-      posthog.capture('financial_inputs_changed', { fields: Object.keys(patch) });
+      track.firstInteraction('financials_edited');
+      track.financialInputsChanged({ fields: Object.keys(patch) });
     },
     [],
   );
@@ -264,7 +266,8 @@ function PlannerInner() {
           const cur = prev[targetMonth] ?? [];
           return { ...prev, [targetMonth]: [...cur, entry] };
         });
-        posthog.capture('role_added', {
+        track.firstInteraction('role_added');
+        track.roleAdded({
           role_key: card.roleKey,
           team: card.team,
           month_index: targetMonth,
@@ -286,7 +289,7 @@ function PlannerInner() {
             [fromMonth]: cur.filter((a) => a.id !== fromId),
           };
         });
-        posthog.capture('role_removed', {
+        track.roleRemoved({
           role_key: card.roleKey,
           team: card.team,
           from_month_index: fromMonth,
@@ -312,7 +315,7 @@ function PlannerInner() {
           [targetMonth]: [...dst, { ...moving, flipFrom: ghostRect }],
         };
       });
-      posthog.capture('role_moved', {
+      track.roleMoved({
         role_key: card.roleKey,
         team: card.team,
         from_month_index: fromMonth,
@@ -425,7 +428,7 @@ function PlannerInner() {
         },
       );
       applyState(state);
-      posthog.capture('scenario_loaded');
+      track.scenarioLoaded();
     },
     [
       applyState,
@@ -443,7 +446,7 @@ function PlannerInner() {
     if (!preLoadSnapshot) return;
     applyState(preLoadSnapshot);
     setPreLoadSnapshot(null);
-    posthog.capture('scenario_reverted');
+    track.scenarioReverted();
   }, [applyState, preLoadSnapshot]);
 
   const handleScenarioSent = useCallback(
@@ -474,7 +477,8 @@ function PlannerInner() {
 
   const handleViewChange = useCallback((next: View) => {
     setView(next);
-    posthog.capture('view_changed', { view: next });
+    track.viewChanged({ view: next });
+    if (next === 'runway') track.runwayViewOpened();
   }, []);
 
   return (

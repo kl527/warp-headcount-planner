@@ -58,6 +58,34 @@ export interface Env {
   DECK_ASSETS: R2Bucket;
   SHARE_FROM_EMAIL: string;
   ALLOWED_ORIGINS?: string;
+  POSTHOG_API_KEY?: string;
+  POSTHOG_HOST?: string;
+}
+
+async function capturePosthog(
+  env: Env,
+  event: string,
+  distinctId: string,
+  properties: Record<string, unknown>,
+): Promise<void> {
+  const apiKey = env.POSTHOG_API_KEY;
+  if (!apiKey) return;
+  const host = env.POSTHOG_HOST ?? "https://us.i.posthog.com";
+  try {
+    await fetch(`${host.replace(/\/$/, "")}/capture/`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        event,
+        distinct_id: distinctId,
+        properties: { ...properties, source: "backend" },
+        timestamp: new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.error("[posthog] capture failed", err);
+  }
 }
 
 function isAllowedOrigin(origin: string, allowlist: string[]): boolean {
@@ -304,8 +332,25 @@ app.post("/share-deck", async (c) => {
     });
   } catch (err) {
     console.error("[share-deck] send error", err);
+    c.executionCtx.waitUntil(
+      capturePosthog(c.env, "share_deck_delivery_failed", normalized, {
+        scenario_name: name,
+        reason: "email_send_threw",
+      }),
+    );
     return c.json({ error: "email_failed" }, 502);
   }
+
+  // Fire-and-forget — we've already sent the email; don't block the response
+  // on PostHog ingestion. distinct_id = email so this event joins the frontend
+  // identify() call on the same user.
+  c.executionCtx.waitUntil(
+    capturePosthog(c.env, "share_deck_delivered", normalized, {
+      scenario_name: name,
+      share_url: url,
+      funnel_step: 10,
+    }),
+  );
 
   return c.json({ ok: true, id: insertedId });
 });

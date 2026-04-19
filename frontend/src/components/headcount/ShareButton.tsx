@@ -2,7 +2,7 @@ import { Check, CornerDownLeft, Loader2, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { getBackendBaseUrl } from '../../lib/backend';
-import { posthog } from '../../lib/posthog';
+import { track } from '../../lib/analytics';
 
 export interface SendDeckResult {
   url: string;
@@ -58,6 +58,29 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [email, setEmail] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const changeDebounceRef = useRef<number | null>(null);
+
+  const handleEmailChange = (next: string) => {
+    setEmail(next);
+    if (changeDebounceRef.current !== null) {
+      window.clearTimeout(changeDebounceRef.current);
+    }
+    changeDebounceRef.current = window.setTimeout(() => {
+      const trimmed = next.trim();
+      track.emailInputChanged({
+        valid: EMAIL_RE.test(trimmed),
+        length: trimmed.length,
+      });
+    }, 800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (changeDebounceRef.current !== null) {
+        window.clearTimeout(changeDebounceRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (mode === 'input') {
@@ -78,13 +101,16 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
   const handleOpen = () => {
     if (mode === 'idle') {
       setMode('input');
-      posthog.capture('share_deck_opened');
+      track.shareButtonClicked();
     }
   };
 
   const trySubmit = async () => {
     const trimmed = email.trim();
-    if (!EMAIL_RE.test(trimmed)) {
+    const valid = EMAIL_RE.test(trimmed);
+    track.emailSubmitAttempted({ valid });
+    if (!valid) {
+      track.emailValidationFailed();
       inputRef.current?.focus();
       return;
     }
@@ -95,7 +121,7 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
       deck = await onShare();
     } catch (err) {
       console.error('[share] deck build failed', err);
-      posthog.capture('share_deck_failed');
+      track.shareDeckFailed({ stage: 'build' });
       setMode('error');
       return;
     }
@@ -116,6 +142,7 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
       });
       if (!res.ok) {
         console.error('[share] send failed', res.status, await res.text());
+        track.shareDeckFailed({ stage: 'server' });
         setMode('error');
         return;
       }
@@ -125,11 +152,14 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
         shareUrl: url,
         createdAt: new Date().toISOString(),
       });
-      posthog.capture('share_deck_sent', { scenario_name: scenarioName });
+      track.shareDeckSent({
+        scenario_name: scenarioName,
+        email: trimmed.toLowerCase(),
+      });
       setMode('sent');
     } catch (err) {
       console.error('[share] send error', err);
-      posthog.capture('share_deck_failed');
+      track.shareDeckFailed({ stage: 'network' });
       setMode('error');
     }
   };
@@ -186,7 +216,8 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
       <InputFace
         active={mode === 'input'}
         email={email}
-        onEmailChange={setEmail}
+        onEmailChange={handleEmailChange}
+        onFocus={() => track.emailInputFocused()}
         onKeyDown={handleKeyDown}
         onSubmit={() => void trySubmit()}
         canSubmit={EMAIL_RE.test(email.trim())}
@@ -253,6 +284,7 @@ function InputFace({
   active,
   email,
   onEmailChange,
+  onFocus,
   onKeyDown,
   onSubmit,
   canSubmit,
@@ -261,6 +293,7 @@ function InputFace({
   active: boolean;
   email: string;
   onEmailChange: (v: string) => void;
+  onFocus: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onSubmit: () => void;
   canSubmit: boolean;
@@ -288,6 +321,7 @@ function InputFace({
         placeholder="send deck to email…"
         value={email}
         onChange={(e) => onEmailChange(e.target.value)}
+        onFocus={onFocus}
         onKeyDown={onKeyDown}
         tabIndex={active ? 0 : -1}
         style={{
