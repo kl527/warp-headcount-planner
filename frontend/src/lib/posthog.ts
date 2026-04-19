@@ -7,9 +7,10 @@ export const posthogEnabled = Boolean(key);
 if (key) {
   posthog.init(key, {
     // Reverse proxy via Vercel rewrites (see vercel.json) so requests hit
-    // our own origin and aren't blocked by uBlock / Brave Shields / Safari
-    // content blockers. The ui_host keeps "view in PostHog" links correct.
-    api_host: '/ingest',
+    // our own origin. Path is deliberately app-specific (not /ingest, not
+    // /track, not /collect) because EasyPrivacy-style filter lists match
+    // those paths regardless of origin.
+    api_host: '/relay-wp',
     ui_host: 'https://us.posthog.com',
     capture_pageview: true,
     capture_pageleave: true,
