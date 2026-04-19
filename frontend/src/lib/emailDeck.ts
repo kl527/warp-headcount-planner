@@ -617,6 +617,12 @@ export async function buildDeckEmailHtml(args: DeckArgs): Promise<{
 
       ${section(`${baseYear}–${lastYear} yearly expenses`, 'Snapshot', expensesHtml)}
 
+      ${section(
+        'Connect Warp to automate this planning',
+        'Integration Hints',
+        `<div style="background:${COLOR.bg};border:1px solid ${COLOR.border};border-radius:10px;padding:14px 16px;font-family:${EMAIL_FONT};font-size:13px;color:${COLOR.muted};line-height:1.5;">Connect Warp to automate this planning.</div>`,
+      )}
+
       <!-- Footer -->
       <tr><td style="padding:24px 32px 32px;font-family:${EMAIL_FONT};">
         <a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:#ff3d00;color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">Open interactive plan →</a>
