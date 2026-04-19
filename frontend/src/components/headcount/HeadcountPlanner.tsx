@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useState } from 'react';
-import { FONT_FAMILIES, PAGE_WIDTH, RADIUS } from '../../constants/design';
+import { BRAND_CTA, FONT_FAMILIES, PAGE_WIDTH, RADIUS } from '../../constants/design';
 import {
   useSalaryCatalog,
   type LocationKey,
@@ -69,6 +69,7 @@ function ShuffleWord() {
       style={{
         fontWeight: 700,
         display: 'inline-block',
+        color: BRAND_CTA.bg,
         transition: 'opacity 220ms ease, transform 220ms ease',
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(-8px)',
@@ -620,6 +621,7 @@ function PlannerInner() {
               assignments={assignments}
               baseYear={baseYear}
               focusedYearIndex={focusedYear}
+              financials={financials}
             />
           </AnimatedSlot>
 

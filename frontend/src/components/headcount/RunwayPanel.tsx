@@ -1,8 +1,10 @@
 import { CalendarRange, TrendingDown } from 'lucide-react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
+import type { FinancialInputs } from './FinancialInputsRow';
 import type { MonthAssignment } from './RolePill';
 import { RunwayChart } from './RunwayChart';
 import { RunwayRemainingPill } from './RunwayCard';
+import { RunwayInsightCard } from './RunwayInsightCard';
 
 interface RunwayPanelProps {
   runwayMonths: number | null;
@@ -10,6 +12,7 @@ interface RunwayPanelProps {
   assignments: Record<number, MonthAssignment[]>;
   baseYear: number;
   focusedYearIndex: number;
+  financials: FinancialInputs;
 }
 
 function ChartHeader({
@@ -51,6 +54,7 @@ export function RunwayPanel({
   assignments,
   baseYear,
   focusedYearIndex,
+  financials,
 }: RunwayPanelProps) {
   const focusStart = focusedYearIndex * 12;
   const focusYear = baseYear + focusedYearIndex;
@@ -96,14 +100,14 @@ export function RunwayPanel({
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
-          minHeight: 200,
+          minHeight: 170,
         }}
       >
         <ChartHeader
           icon={<TrendingDown size={11} strokeWidth={2.2} />}
           text={`${baseYear}–${lastYear} cash runway`}
         />
-        <div style={{ flex: 1, minHeight: 170 }}>
+        <div style={{ flex: 1, minHeight: 140 }}>
           <RunwayChart
             balances={balances}
             assignments={assignments}
@@ -111,6 +115,7 @@ export function RunwayPanel({
             startMonthIndex={0}
             xTickMode="year"
             showYAxis
+            minHeight={140}
           />
         </div>
       </div>
@@ -125,14 +130,14 @@ export function RunwayPanel({
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
-          minHeight: 190,
+          minHeight: 160,
         }}
       >
         <ChartHeader
           icon={<CalendarRange size={11} strokeWidth={2.2} />}
           text={`${focusYear} monthly cash`}
         />
-        <div style={{ flex: 1, minHeight: 160 }}>
+        <div style={{ flex: 1, minHeight: 130 }}>
           <RunwayChart
             balances={focusBalances}
             assignments={assignments}
@@ -140,9 +145,17 @@ export function RunwayPanel({
             startMonthIndex={focusStart}
             xTickMode="month"
             showYAxis
+            minHeight={130}
           />
         </div>
       </div>
+
+      <RunwayInsightCard
+        companyBalance={financials.companyBalance}
+        mrr={financials.mrr}
+        momGrowthPct={financials.momGrowthPct}
+        runwayMonths={runwayMonths}
+      />
     </aside>
   );
 }

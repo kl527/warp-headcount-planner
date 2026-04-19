@@ -1,6 +1,8 @@
+import { generateText } from "ai";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { customAlphabet } from "nanoid";
+import { createWorkersAI } from "workers-ai-provider";
 import {
   salaryBandsHandler,
   salaryLookupHandler,
@@ -56,6 +58,7 @@ export interface Env {
   DB: D1Database;
   EMAIL: SendEmailBinding;
   DECK_ASSETS: R2Bucket;
+  AI: Ai;
   SHARE_FROM_EMAIL: string;
   ALLOWED_ORIGINS?: string;
   POSTHOG_API_KEY?: string;
@@ -128,6 +131,72 @@ app.use("*", async (c, next) => {
 });
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+app.post("/runway-insight", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid_json" }, 400);
+  }
+  if (typeof body !== "object" || body === null) {
+    return c.json({ error: "invalid_body" }, 400);
+  }
+  const { companyBalance, mrr, momGrowthPct, runwayMonths } = body as {
+    companyBalance?: unknown;
+    mrr?: unknown;
+    momGrowthPct?: unknown;
+    runwayMonths?: unknown;
+  };
+  if (
+    typeof companyBalance !== "number" ||
+    typeof mrr !== "number" ||
+    typeof momGrowthPct !== "number"
+  ) {
+    return c.json({ error: "invalid_metrics" }, 400);
+  }
+  const runway =
+    typeof runwayMonths === "number"
+      ? `${runwayMonths.toFixed(1)} months`
+      : "12+ months";
+
+  const workersai = createWorkersAI({ binding: c.env.AI });
+  const fmtUsd = (n: number) =>
+    n >= 1_000_000
+      ? `$${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `$${Math.round(n / 1_000)}k`
+        : `$${Math.round(n)}`;
+
+  const userPrompt = [
+    `Company balance: ${fmtUsd(companyBalance)}`,
+    `MRR: ${fmtUsd(mrr)}`,
+    `MoM growth: ${momGrowthPct.toFixed(1)}%`,
+    `Runway: ${runway}`,
+    "",
+    "Respond with ONE sentence (max 22 words), plain text only, no quotes, no preamble.",
+    'Format: "Companies like yours typically <concrete recommendation tied to a month, role, or dollar number>."',
+  ].join("\n");
+
+  try {
+    const { text } = await generateText({
+      model: workersai("@cf/openai/gpt-oss-120b"),
+      system:
+        "You are a concise startup finance advisor. Output one specific, data-aware recommendation about hiring cadence, spend discipline, or runway extension. No greetings, no caveats, no lists.",
+      prompt: userPrompt,
+      maxOutputTokens: 80,
+      temperature: 0.7,
+    });
+    const insight = text
+      .replace(/^["'\s]+|["'\s]+$/g, "")
+      .split("\n")[0]
+      .trim();
+    return c.json({ insight });
+  } catch (err) {
+    console.error("[runway-insight] generation failed", err);
+    return c.json({ error: "generation_failed" }, 502);
+  }
+});
 
 app.get("/salary-bands", salaryBandsHandler);
 app.get("/salary-bands/lookup", salaryLookupHandler);

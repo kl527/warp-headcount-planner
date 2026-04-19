@@ -12,9 +12,10 @@ interface RunwayChartProps {
   startMonthIndex?: number;
   xTickMode?: 'year' | 'month';
   showYAxis?: boolean;
+  minHeight?: number;
 }
 
-const MIN_HEIGHT = 140;
+const DEFAULT_MIN_HEIGHT = 140;
 
 const NEUTRAL_STROKE = '#1e1e1e';
 const NEGATIVE_STROKE = '#e21200';
@@ -57,11 +58,12 @@ export function RunwayChart({
   startMonthIndex = 0,
   xTickMode = 'year',
   showYAxis = true,
+  minHeight = DEFAULT_MIN_HEIGHT,
 }: RunwayChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({
     w: 300,
-    h: MIN_HEIGHT,
+    h: minHeight,
   });
 
   useLayoutEffect(() => {
@@ -70,9 +72,9 @@ export function RunwayChart({
     const rect = el.getBoundingClientRect();
     setSize({
       w: Math.max(1, rect.width),
-      h: Math.max(MIN_HEIGHT, rect.height),
+      h: Math.max(minHeight, rect.height),
     });
-  }, []);
+  }, [minHeight]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -82,13 +84,13 @@ export function RunwayChart({
         const { width, height } = entry.contentRect;
         setSize({
           w: Math.max(1, width),
-          h: Math.max(MIN_HEIGHT, height),
+          h: Math.max(minHeight, height),
         });
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [minHeight]);
 
   const marginLeft = showYAxis ? 42 : 8;
   const marginRight = 10;
@@ -183,7 +185,7 @@ export function RunwayChart({
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100%', minHeight: MIN_HEIGHT }}
+      style={{ width: '100%', height: '100%', minHeight }}
     >
       <svg
         width={w}

@@ -22,6 +22,9 @@
 			"name": "EMAIL"
 		}
 	],
+	"ai": {
+		"binding": "AI"
+	},
 	"r2_buckets": [
 		{
 			"binding": "DECK_ASSETS",
