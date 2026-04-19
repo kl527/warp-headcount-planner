@@ -147,4 +147,8 @@ export const track = {
   },
   shareDeckFailed: (p: { stage: 'build' | 'network' | 'server' }) =>
     capture('share_deck_failed', p),
+  fundraisingTargetChanged: (p: { target_months: number }) =>
+    capture('fundraising_target_changed', p),
+  fundraisingBufferToggled: (p: { on: boolean }) =>
+    capture('fundraising_buffer_toggled', p),
 };

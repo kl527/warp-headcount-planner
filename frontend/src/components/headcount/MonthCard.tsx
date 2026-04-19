@@ -32,7 +32,7 @@ export function MonthCard({
   return (
     <div
       ref={ref}
-      className="min-h-[90px] tablet:min-h-[140px] laptop:min-h-[160px]"
+      className="min-h-[90px] tablet:min-h-[140px] laptop:min-h-[200px]"
       style={{
         background: '#fff',
         border: '0.5px solid #f9f9f9',

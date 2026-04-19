@@ -2,13 +2,14 @@ import { CalendarRange, TrendingDown } from 'lucide-react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import type { FinancialInputs } from './FinancialInputsRow';
 import type { MonthAssignment } from './RolePill';
+import { FundraisingCard } from './FundraisingCard';
 import { RunwayChart } from './RunwayChart';
-import { RunwayRemainingPill } from './RunwayCard';
 import { RunwayInsightCard } from './RunwayInsightCard';
 
 interface RunwayPanelProps {
   runwayMonths: number | null;
   balances: number[];
+  endOfMonthBalances: number[];
   assignments: Record<number, MonthAssignment[]>;
   baseYear: number;
   focusedYearIndex: number;
@@ -51,6 +52,7 @@ function ChartHeader({
 export function RunwayPanel({
   runwayMonths,
   balances,
+  endOfMonthBalances,
   assignments,
   baseYear,
   focusedYearIndex,
@@ -88,7 +90,11 @@ export function RunwayPanel({
         Runway
       </span>
 
-      <RunwayRemainingPill runwayMonths={runwayMonths} />
+      <FundraisingCard
+        runwayMonths={runwayMonths}
+        endOfMonthBalances={endOfMonthBalances}
+        baseYear={baseYear}
+      />
 
       <div
         style={{

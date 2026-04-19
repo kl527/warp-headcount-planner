@@ -54,14 +54,22 @@ function ShuffleWord() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const cycle = () => {
       setVisible(false);
       setTimeout(() => {
         setIndex((i) => (i + 1) % SHUFFLE_WORDS.length);
         setVisible(true);
       }, 220);
-    }, 3000);
-    return () => clearInterval(interval);
+    };
+    let interval: number | undefined;
+    const first = window.setTimeout(() => {
+      cycle();
+      interval = window.setInterval(cycle, 3000);
+    }, 1000);
+    return () => {
+      window.clearTimeout(first);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -618,6 +626,7 @@ function PlannerInner() {
             <RunwayPanel
               runwayMonths={runwayMonths}
               balances={monthlyBalances}
+              endOfMonthBalances={endOfMonthBalances}
               assignments={assignments}
               baseYear={baseYear}
               focusedYearIndex={focusedYear}

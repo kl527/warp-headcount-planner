@@ -177,10 +177,17 @@ export function RunwayCardStack({
 
   useEffect(() => {
     if (total < 2) return;
-    const id = window.setInterval(() => {
+    let interval: number | undefined;
+    const first = window.setTimeout(() => {
       startCycle();
-    }, AUTO_INTERVAL_MS);
-    return () => window.clearInterval(id);
+      interval = window.setInterval(() => {
+        startCycle();
+      }, AUTO_INTERVAL_MS);
+    }, 1000);
+    return () => {
+      window.clearTimeout(first);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
     // startCycle is stable in behavior; capturing it directly to satisfy lint
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total]);
