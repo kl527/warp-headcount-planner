@@ -133,15 +133,23 @@ app.use("*", async (c, next) => {
 app.get("/health", (c) => c.json({ status: "ok" }));
 
 app.post("/runway-insight", async (c) => {
+  const reqId = shortCode();
+  const origin = c.req.header("origin") ?? "<none>";
+  console.log(`[runway-insight ${reqId}] START origin=${origin}`);
+
   let body: unknown;
   try {
     body = await c.req.json();
-  } catch {
+  } catch (err) {
+    console.error(`[runway-insight ${reqId}] invalid_json`, err);
     return c.json({ error: "invalid_json" }, 400);
   }
   if (typeof body !== "object" || body === null) {
+    console.error(`[runway-insight ${reqId}] invalid_body typeof=${typeof body}`);
     return c.json({ error: "invalid_body" }, 400);
   }
+  console.log(`[runway-insight ${reqId}] body=`, JSON.stringify(body));
+
   const { companyBalance, mrr, momGrowthPct, runwayMonths } = body as {
     companyBalance?: unknown;
     mrr?: unknown;
@@ -153,12 +161,22 @@ app.post("/runway-insight", async (c) => {
     typeof mrr !== "number" ||
     typeof momGrowthPct !== "number"
   ) {
+    console.error(
+      `[runway-insight ${reqId}] invalid_metrics types=`,
+      typeof companyBalance,
+      typeof mrr,
+      typeof momGrowthPct,
+    );
     return c.json({ error: "invalid_metrics" }, 400);
   }
   const runway =
     typeof runwayMonths === "number"
       ? `${runwayMonths.toFixed(1)} months`
       : "12+ months";
+
+  console.log(
+    `[runway-insight ${reqId}] metrics balance=${companyBalance} mrr=${mrr} growth=${momGrowthPct} runway=${runway} hasAI=${!!c.env.AI}`,
+  );
 
   const workersai = createWorkersAI({ binding: c.env.AI });
   const fmtUsd = (n: number) =>
@@ -178,23 +196,43 @@ app.post("/runway-insight", async (c) => {
     'Format: "Companies like yours typically <concrete recommendation tied to a month, role, or dollar number>."',
   ].join("\n");
 
+  const started = Date.now();
   try {
-    const { text } = await generateText({
+    const result = await generateText({
       model: workersai("@cf/openai/gpt-oss-120b"),
       system:
         "You are a concise startup finance advisor. Output one specific, data-aware recommendation about hiring cadence, spend discipline, or runway extension. No greetings, no caveats, no lists.",
       prompt: userPrompt,
-      maxOutputTokens: 80,
+      maxOutputTokens: 512,
       temperature: 0.7,
+      providerOptions: {
+        "workers-ai": { reasoning: { effort: "low" } },
+      },
     });
-    const insight = text
+    const elapsed = Date.now() - started;
+    const rawText = result.text ?? "";
+    console.log(
+      `[runway-insight ${reqId}] model_ok elapsed_ms=${elapsed} finishReason=${result.finishReason} textLen=${rawText.length}`,
+    );
+    console.log(`[runway-insight ${reqId}] raw_text=`, JSON.stringify(rawText));
+    if (result.warnings && result.warnings.length > 0) {
+      console.warn(`[runway-insight ${reqId}] warnings=`, JSON.stringify(result.warnings));
+    }
+    const insight = rawText
       .replace(/^["'\s]+|["'\s]+$/g, "")
       .split("\n")[0]
       .trim();
+    console.log(`[runway-insight ${reqId}] insight=`, JSON.stringify(insight));
     return c.json({ insight });
   } catch (err) {
-    console.error("[runway-insight] generation failed", err);
-    return c.json({ error: "generation_failed" }, 502);
+    const elapsed = Date.now() - started;
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(
+      `[runway-insight ${reqId}] generation_failed elapsed_ms=${elapsed} message=${message}`,
+    );
+    if (stack) console.error(`[runway-insight ${reqId}] stack=`, stack);
+    return c.json({ error: "generation_failed", detail: message }, 502);
   }
 });
 
