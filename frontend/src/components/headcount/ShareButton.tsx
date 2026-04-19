@@ -2,6 +2,7 @@ import { Check, CornerDownLeft, Loader2, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, RADIUS } from '../../constants/design';
 import { getBackendBaseUrl } from '../../lib/backend';
+import { posthog } from '../../lib/posthog';
 
 export interface SendDeckResult {
   url: string;
@@ -75,7 +76,10 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
   }, [mode]);
 
   const handleOpen = () => {
-    if (mode === 'idle') setMode('input');
+    if (mode === 'idle') {
+      setMode('input');
+      posthog.capture('share_deck_opened');
+    }
   };
 
   const trySubmit = async () => {
@@ -91,6 +95,7 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
       deck = await onShare();
     } catch (err) {
       console.error('[share] deck build failed', err);
+      posthog.capture('share_deck_failed');
       setMode('error');
       return;
     }
@@ -120,9 +125,11 @@ export function ShareButton({ onShare, onSent }: ShareButtonProps) {
         shareUrl: url,
         createdAt: new Date().toISOString(),
       });
+      posthog.capture('share_deck_sent', { scenario_name: scenarioName });
       setMode('sent');
     } catch (err) {
       console.error('[share] send error', err);
+      posthog.capture('share_deck_failed');
       setMode('error');
     }
   };

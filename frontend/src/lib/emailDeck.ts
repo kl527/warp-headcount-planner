@@ -1,6 +1,7 @@
 import * as d3 from 'd3';
 import { MONTH_LABELS, MONTH_SHORT } from '../data/headcount';
 import type { MonthAssignment } from '../components/headcount/RolePill';
+import { getBackendBaseUrl } from './backend';
 
 // ---------------------------------------------------------------------------
 // Email-safe palette. Gmail/Outlook drop oklch(); inline hex only.
@@ -245,14 +246,14 @@ export function svgToDataUri(svg: string): string {
   return `data:image/svg+xml;base64,${btoa(utf8)}`;
 }
 
-// Gmail strips SVG data URIs for security. Rasterize to PNG via canvas so the
-// image survives every major email client (Gmail web/mobile, Apple Mail,
-// Outlook web/desktop).
-export async function svgToPngDataUri(
+// Gmail strips SVG and blocks `data:` URIs in <img src>. Rasterize to a PNG
+// blob, then upload to the worker-backed R2 bucket so we can reference it via
+// a regular https URL that every major email client will fetch.
+export async function svgToPngBlob(
   svg: string,
   width: number,
   height: number,
-): Promise<string> {
+): Promise<Blob> {
   const svgDataUri = svgToDataUri(svg);
   const img = new Image();
   await new Promise<void>((resolve, reject) => {
@@ -260,7 +261,6 @@ export async function svgToPngDataUri(
     img.onerror = () => reject(new Error('svg load failed'));
     img.src = svgDataUri;
   });
-  // Keep 1x to stay well under Gmail's 102KB message clipping threshold.
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -269,7 +269,37 @@ export async function svgToPngDataUri(
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
   ctx.drawImage(img, 0, 0, width, height);
-  return canvas.toDataURL('image/png');
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) resolve(b);
+      else reject(new Error('canvas toBlob failed'));
+    }, 'image/png');
+  });
+}
+
+async function uploadPng(blob: Blob): Promise<string> {
+  const res = await fetch(`${getBackendBaseUrl()}/deck-assets`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/png' },
+    body: blob,
+  });
+  if (!res.ok) {
+    throw new Error(`upload failed: ${res.status}`);
+  }
+  const json = (await res.json()) as { url?: unknown };
+  if (typeof json.url !== 'string' || json.url.length === 0) {
+    throw new Error('upload returned no url');
+  }
+  return json.url;
+}
+
+export async function svgToHostedPngUrl(
+  svg: string,
+  width: number,
+  height: number,
+): Promise<string> {
+  const blob = await svgToPngBlob(svg, width, height);
+  return await uploadPng(blob);
 }
 
 // ---------------------------------------------------------------------------
@@ -502,8 +532,8 @@ export async function buildDeckEmailHtml(args: DeckArgs): Promise<{
   });
 
   const [fullChartImg, detailChartImg] = await Promise.all([
-    svgToPngDataUri(fullChartSvg, FULL_W, FULL_H),
-    svgToPngDataUri(detailChartSvg, DETAIL_W, DETAIL_H),
+    svgToHostedPngUrl(fullChartSvg, FULL_W, FULL_H),
+    svgToHostedPngUrl(detailChartSvg, DETAIL_W, DETAIL_H),
   ]);
 
   const calendarHtml = buildCalendarHtml(assignments, endOfMonthBalances, baseYear, 2026);

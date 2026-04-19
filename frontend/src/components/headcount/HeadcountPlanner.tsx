@@ -43,6 +43,7 @@ import {
   type ShareableState,
 } from '../../lib/shareState';
 import { YearCard } from './YearCard';
+import { posthog } from '../../lib/posthog';
 
 const BASE_YEAR = 2026;
 
@@ -139,6 +140,7 @@ function PlannerInner() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (!params.has('state')) return;
+    posthog.capture('share_link_opened');
     params.delete('state');
     const qs = params.toString();
     const next =
@@ -151,6 +153,7 @@ function PlannerInner() {
   const handleYearSelect = useCallback((yearIndex: number) => {
     setFocusedYear(yearIndex);
     setView('month');
+    posthog.capture('view_changed', { view: 'month', trigger: 'year_select' });
   }, []);
 
   const stepYear = (delta: number) => {
@@ -172,6 +175,7 @@ function PlannerInner() {
 
   const handleLocationChange = useCallback((next: LocationKey) => {
     setManualLocation(next);
+    posthog.capture('location_changed', { location: next });
   }, []);
 
   const handleRoleSalaryChange = useCallback(
@@ -225,6 +229,7 @@ function PlannerInner() {
   const handleFinancialsChange = useCallback(
     (patch: Partial<FinancialInputs>) => {
       setFinancials((prev) => ({ ...prev, ...patch }));
+      posthog.capture('financial_inputs_changed', { fields: Object.keys(patch) });
     },
     [],
   );
@@ -259,6 +264,12 @@ function PlannerInner() {
           const cur = prev[targetMonth] ?? [];
           return { ...prev, [targetMonth]: [...cur, entry] };
         });
+        posthog.capture('role_added', {
+          role_key: card.roleKey,
+          team: card.team,
+          month_index: targetMonth,
+          view,
+        });
         return;
       }
 
@@ -274,6 +285,11 @@ function PlannerInner() {
             ...prev,
             [fromMonth]: cur.filter((a) => a.id !== fromId),
           };
+        });
+        posthog.capture('role_removed', {
+          role_key: card.roleKey,
+          team: card.team,
+          from_month_index: fromMonth,
         });
         return;
       }
@@ -295,6 +311,13 @@ function PlannerInner() {
           [fromMonth]: src.filter((a) => a.id !== fromId),
           [targetMonth]: [...dst, { ...moving, flipFrom: ghostRect }],
         };
+      });
+      posthog.capture('role_moved', {
+        role_key: card.roleKey,
+        team: card.team,
+        from_month_index: fromMonth,
+        to_month_index: targetMonth,
+        view,
       });
     },
     [view],
@@ -402,6 +425,7 @@ function PlannerInner() {
         },
       );
       applyState(state);
+      posthog.capture('scenario_loaded');
     },
     [
       applyState,
@@ -419,6 +443,7 @@ function PlannerInner() {
     if (!preLoadSnapshot) return;
     applyState(preLoadSnapshot);
     setPreLoadSnapshot(null);
+    posthog.capture('scenario_reverted');
   }, [applyState, preLoadSnapshot]);
 
   const handleScenarioSent = useCallback(
@@ -446,6 +471,11 @@ function PlannerInner() {
     },
     [],
   );
+
+  const handleViewChange = useCallback((next: View) => {
+    setView(next);
+    posthog.capture('view_changed', { view: next });
+  }, []);
 
   return (
     <div className="min-h-svh">
@@ -504,7 +534,7 @@ function PlannerInner() {
           values={financials}
           onChange={handleFinancialsChange}
           view={view}
-          onViewChange={setView}
+          onViewChange={handleViewChange}
           viewToggleAccessory={
             <ShareButton onShare={buildShareDeck} onSent={handleScenarioSent} />
           }
@@ -516,7 +546,7 @@ function PlannerInner() {
             side="left"
             label="Costs"
             icon={<PanelLeftOpen size={14} strokeWidth={2} />}
-            onClick={() => setView('month')}
+            onClick={() => handleViewChange('month')}
           />
 
           <AnimatedSlot active={view !== 'runway'} from="left">
@@ -594,7 +624,7 @@ function PlannerInner() {
             side="right"
             label="Runway"
             icon={<PanelRightOpen size={14} strokeWidth={2} />}
-            onClick={() => setView('runway')}
+            onClick={() => handleViewChange('runway')}
           />
         </section>
 

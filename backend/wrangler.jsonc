@@ -1,26 +1,40 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "warp-headcount-planner-backend",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": {
-    "enabled": true
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "warp-headcount-planner",
-      "database_id": "796283d0-b5b1-4b80-b2e0-31c0cbdc60e1",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "send_email": [
-    {
-      "name": "EMAIL"
-    }
-  ],
-  "vars": {
-    "SHARE_FROM_EMAIL": "Warp Planner <noreply@warp.kyungsub.com>"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "warp-headcount-planner-backend",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "warp-headcount-planner",
+			"database_id": "796283d0-b5b1-4b80-b2e0-31c0cbdc60e1",
+			"migrations_dir": "migrations"
+		}
+	],
+	"send_email": [
+		{
+			"name": "EMAIL"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "DECK_ASSETS",
+			"bucket_name": "warp-deck-assets"
+		},
+		{
+			"bucket_name": "warp-deck-assets",
+			"binding": "warp_deck_assets",
+			"remote": true
+		}
+	],
+	"vars": {
+		"SHARE_FROM_EMAIL": "Warp Planner <noreply@warp.kyungsub.com>",
+		"ALLOWED_ORIGINS": "https://warp-headcount-planner.vercel.app,https://*.vercel.app"
+	}
 }

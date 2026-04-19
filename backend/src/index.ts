@@ -7,10 +7,6 @@ import {
   type LocationKey,
 } from "./salaryBands";
 
-// TODO: swap Map for Workers KV or D1 before this leaves local dev —
-// in-memory state only survives within a single Worker isolate.
-const store = new Map<string, StoredScenario>();
-
 const shortCode = customAlphabet(
   "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789",
   6,
@@ -59,28 +55,49 @@ interface SendEmailBinding {
 export interface Env {
   DB: D1Database;
   EMAIL: SendEmailBinding;
+  DECK_ASSETS: R2Bucket;
   SHARE_FROM_EMAIL: string;
+  ALLOWED_ORIGINS?: string;
+}
+
+function isAllowedOrigin(origin: string, allowlist: string[]): boolean {
+  if (/^http:\/\/localhost:\d+$/.test(origin)) return true;
+  if (/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) return true;
+  for (const entry of allowlist) {
+    if (!entry) continue;
+    if (entry === origin) return true;
+    // Support wildcard subdomain patterns like https://*.vercel.app
+    if (entry.includes("*")) {
+      const pattern = new RegExp(
+        "^" + entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") + "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+  }
+  return false;
 }
 
 const MAX_HTML_BYTES = 600_000; // generous cap for the inline SVG deck
+const MAX_ASSET_BYTES = 1_000_000; // 1MB cap per chart PNG
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use(
-  "*",
-  cors({
+app.use("*", async (c, next) => {
+  const allowlist = (c.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return cors({
     origin: (origin) => {
       if (!origin) return origin;
-      if (/^http:\/\/localhost:\d+$/.test(origin)) return origin;
-      if (/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) return origin;
-      return "";
+      return isAllowedOrigin(origin, allowlist) ? origin : "";
     },
     allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowHeaders: ["content-type"],
-  }),
-);
+  })(c, next);
+});
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
@@ -150,14 +167,6 @@ app.get("/geo", (c) => {
   const region = typeof cf?.region === "string" ? cf.region : null;
   const country = typeof cf?.country === "string" ? cf.country : null;
   const key = mapGeoToLocationKey({ city, region, country });
-  console.log("[geo]", {
-    origin: c.req.header("origin") ?? null,
-    cfPresent: cf !== undefined,
-    city,
-    region,
-    country,
-    key,
-  });
   c.header("Cache-Control", "no-store");
   return c.json({ city, region, country, key });
 });
@@ -173,7 +182,16 @@ app.post("/scenarios", async (c) => {
     return c.json({ error: "invalid_scenario_shape" }, 400);
   }
   const code = shortCode();
-  store.set(code, body);
+  try {
+    await c.env.DB.prepare(
+      "INSERT INTO scenarios (short_code, payload) VALUES (?, ?)",
+    )
+      .bind(code, JSON.stringify(body))
+      .run();
+  } catch (err) {
+    console.error("[scenarios] insert failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
   return c.json({ id: body.id, shortCode: code });
 });
 
@@ -373,13 +391,87 @@ app.patch("/share-emails/:id/name", async (c) => {
   return c.json({ ok: true, name: trimmed.length > 0 ? trimmed : null });
 });
 
-app.get("/scenarios/:shortCode", (c) => {
+app.get("/scenarios/:shortCode", async (c) => {
   const code = c.req.param("shortCode");
-  const scenario = store.get(code);
-  if (!scenario) {
-    return c.json({ error: "not_found" }, 404);
+  let row: { payload: string } | null = null;
+  try {
+    row = await c.env.DB.prepare(
+      "SELECT payload FROM scenarios WHERE short_code = ?",
+    )
+      .bind(code)
+      .first<{ payload: string }>();
+  } catch (err) {
+    console.error("[scenarios] lookup failed", err);
+    return c.json({ error: "storage_failed" }, 500);
   }
-  return c.json(scenario);
+  if (!row) return c.json({ error: "not_found" }, 404);
+  try {
+    return c.json(JSON.parse(row.payload));
+  } catch {
+    return c.json({ error: "corrupt_payload" }, 500);
+  }
+});
+
+app.post("/deck-assets", async (c) => {
+  const contentType = c.req.header("content-type") ?? "";
+  if (contentType !== "image/png") {
+    return c.json({ error: "invalid_content_type" }, 415);
+  }
+  const lenHeader = c.req.header("content-length");
+  const declared = lenHeader ? Number(lenHeader) : NaN;
+  if (Number.isFinite(declared) && declared > MAX_ASSET_BYTES) {
+    return c.json({ error: "asset_too_large" }, 413);
+  }
+  const buf = await c.req.arrayBuffer();
+  if (buf.byteLength === 0) {
+    return c.json({ error: "empty_body" }, 400);
+  }
+  if (buf.byteLength > MAX_ASSET_BYTES) {
+    return c.json({ error: "asset_too_large" }, 413);
+  }
+  // PNG magic: 89 50 4E 47 0D 0A 1A 0A
+  const head = new Uint8Array(buf, 0, Math.min(8, buf.byteLength));
+  const isPng =
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47 &&
+    head[4] === 0x0d &&
+    head[5] === 0x0a &&
+    head[6] === 0x1a &&
+    head[7] === 0x0a;
+  if (!isPng) {
+    return c.json({ error: "not_png" }, 400);
+  }
+  const key = `${shortCode()}${shortCode()}.png`;
+  try {
+    await c.env.DECK_ASSETS.put(key, buf, {
+      httpMetadata: { contentType: "image/png" },
+    });
+  } catch (err) {
+    console.error("[deck-assets] put failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
+  const origin = new URL(c.req.url).origin;
+  return c.json({ url: `${origin}/deck-assets/${key}` });
+});
+
+app.get("/deck-assets/:key", async (c) => {
+  const key = c.req.param("key");
+  if (!/^[A-Za-z0-9]+\.png$/.test(key)) {
+    return c.json({ error: "invalid_key" }, 400);
+  }
+  let obj: R2ObjectBody | null = null;
+  try {
+    obj = await c.env.DECK_ASSETS.get(key);
+  } catch (err) {
+    console.error("[deck-assets] get failed", err);
+    return c.json({ error: "storage_failed" }, 500);
+  }
+  if (!obj) return c.json({ error: "not_found" }, 404);
+  c.header("content-type", "image/png");
+  c.header("cache-control", "public, max-age=31536000, immutable");
+  return c.body(obj.body);
 });
 
 export default app satisfies ExportedHandler<Env>;

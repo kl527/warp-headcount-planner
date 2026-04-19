@@ -6,7 +6,7 @@ export function getBackendBaseUrl(): string {
     typeof raw === "string" && raw.length > 0
       ? raw.replace(/\/+$/, "")
       : "http://localhost:8787";
-  if (!loggedBackendUrl) {
+  if (import.meta.env.DEV && !loggedBackendUrl) {
     loggedBackendUrl = true;
     console.log(
       "[backend] base URL =",
