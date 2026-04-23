@@ -5,7 +5,7 @@ import {
   PanelRightOpen,
 } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BRAND_CTA, FONT_FAMILIES, PAGE_WIDTH, RADIUS } from '../../constants/design';
 import {
   useSalaryCatalog,
@@ -575,51 +575,55 @@ function PlannerInner() {
           </AnimatedSlot>
 
           <div className="flex-1 min-w-0 flex flex-col gap-[14px]">
-            {view === 'year' ? (
-              <div className="flex flex-col gap-[14px]">
-                {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
-                  <YearCard
-                    key={y}
-                    yearIndex={y}
-                    year={baseYear + y}
-                    balanceUsd={yearlyBalances[y]}
-                    assignments={yearAssignments[y]}
-                    isDropTarget={drag?.armed && drag.dropTarget === y}
-                    onRegister={registerMonth}
-                    onFlipDone={handleFlipDone}
-                    onSelect={handleYearSelect}
-                  />
-                ))}
-              </div>
-            ) : (
-              <>
-                <YearStepper
-                  year={baseYear + focusedYear}
-                  canPrev={focusedYear > 0}
-                  canNext={focusedYear < HORIZON_YEARS - 1}
-                  onPrev={() => stepYear(-1)}
-                  onNext={() => stepYear(1)}
-                />
-                <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
-                  {Array.from({ length: 12 }).map((_, idx) => {
-                    const monthIndex = focusedYear * 12 + idx;
-                    return (
-                      <MonthCard
-                        key={monthIndex}
-                        monthIndex={monthIndex}
-                        balanceUsd={monthlyBalances[monthIndex]}
-                        assignments={assignments[monthIndex]}
-                        isDropTarget={
-                          drag?.armed && drag.dropTarget === monthIndex
-                        }
-                        onRegister={registerMonth}
-                        onFlipDone={handleFlipDone}
-                      />
-                    );
-                  })}
+            <ViewSwap
+              isYear={view === 'year'}
+              yearPane={
+                <div className="flex flex-col gap-[14px]">
+                  {Array.from({ length: HORIZON_YEARS }).map((_, y) => (
+                    <YearCard
+                      key={y}
+                      yearIndex={y}
+                      year={baseYear + y}
+                      balanceUsd={yearlyBalances[y]}
+                      assignments={yearAssignments[y]}
+                      isDropTarget={drag?.armed && drag.dropTarget === y}
+                      onRegister={registerMonth}
+                      onFlipDone={handleFlipDone}
+                      onSelect={handleYearSelect}
+                    />
+                  ))}
                 </div>
-              </>
-            )}
+              }
+              monthPane={
+                <div className="flex flex-col gap-[14px]">
+                  <YearStepper
+                    year={baseYear + focusedYear}
+                    canPrev={focusedYear > 0}
+                    canNext={focusedYear < HORIZON_YEARS - 1}
+                    onPrev={() => stepYear(-1)}
+                    onNext={() => stepYear(1)}
+                  />
+                  <div className="grid grid-cols-2 tablet:grid-cols-3 xl:grid-cols-4 gap-[14px]">
+                    {Array.from({ length: 12 }).map((_, idx) => {
+                      const monthIndex = focusedYear * 12 + idx;
+                      return (
+                        <MonthCard
+                          key={monthIndex}
+                          monthIndex={monthIndex}
+                          balanceUsd={monthlyBalances[monthIndex]}
+                          assignments={assignments[monthIndex]}
+                          isDropTarget={
+                            drag?.armed && drag.dropTarget === monthIndex
+                          }
+                          onRegister={registerMonth}
+                          onFlipDone={handleFlipDone}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              }
+            />
           </div>
 
           <AnimatedSlot active={view === 'runway'} from="right">
@@ -711,6 +715,90 @@ function AnimatedSlot({
         }}
       >
         {children}
+      </div>
+    </div>
+  );
+}
+
+function ViewSwap({
+  isYear,
+  yearPane,
+  monthPane,
+}: {
+  isYear: boolean;
+  yearPane: React.ReactNode;
+  monthPane: React.ReactNode;
+}) {
+  const yearRef = useRef<HTMLDivElement | null>(null);
+  const monthRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const apply = () => setReducedMotion(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    const active = isYear ? yearRef.current : monthRef.current;
+    if (!active) return;
+    const update = () => setHeight(active.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(active);
+    return () => ro.disconnect();
+  }, [isYear]);
+
+  const animate = height !== null && !reducedMotion;
+  const transformTx = reducedMotion ? 0 : 18;
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateAreas: '"swap"',
+        overflow: 'hidden',
+        height: height ?? undefined,
+        transition: animate
+          ? `height ${SLOT_DURATION_MS}ms ${SLOT_SPRING}`
+          : undefined,
+      }}
+    >
+      <div
+        ref={yearRef}
+        aria-hidden={!isYear}
+        style={{
+          gridArea: 'swap',
+          transform: isYear ? 'translateX(0)' : `translateX(-${transformTx}px)`,
+          opacity: isYear ? 1 : 0,
+          pointerEvents: isYear ? 'auto' : 'none',
+          transition: animate
+            ? `transform ${SLOT_DURATION_MS}ms ${SLOT_SPRING}, opacity 220ms ease-out`
+            : undefined,
+          willChange: 'transform, opacity',
+        }}
+      >
+        {yearPane}
+      </div>
+      <div
+        ref={monthRef}
+        aria-hidden={isYear}
+        style={{
+          gridArea: 'swap',
+          transform: isYear ? `translateX(${transformTx}px)` : 'translateX(0)',
+          opacity: isYear ? 0 : 1,
+          pointerEvents: isYear ? 'none' : 'auto',
+          transition: animate
+            ? `transform ${SLOT_DURATION_MS}ms ${SLOT_SPRING}, opacity 220ms ease-out`
+            : undefined,
+          willChange: 'transform, opacity',
+        }}
+      >
+        {monthPane}
       </div>
     </div>
   );

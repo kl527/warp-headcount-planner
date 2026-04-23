@@ -1,4 +1,10 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+const COUNT_UP_MS = 1000;
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
 
 function formatWithCommas(n: number): string {
   if (!Number.isFinite(n)) return '0';
@@ -22,11 +28,87 @@ interface MoneyInputProps extends NativeInputProps {
   onChange: (next: number) => void;
 }
 
-export function MoneyInput({ value, onChange, ...rest }: MoneyInputProps) {
+export function MoneyInput({
+  value,
+  onChange,
+  onFocus,
+  onBlur,
+  ...rest
+}: MoneyInputProps) {
   const ref = useRef<HTMLInputElement | null>(null);
   const pendingCursor = useRef<number | null>(null);
 
-  const display = formatWithCommas(value);
+  const [displayed, setDisplayed] = useState(value);
+  const displayedRef = useRef(value);
+  const lastSentRef = useRef(value);
+  const focusedRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const reducedMotionRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotionRef.current = mq.matches;
+    const apply = () => {
+      reducedMotionRef.current = mq.matches;
+    };
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    // If this prop change matches what we just sent via onChange (user typing),
+    // no tween — just track the value.
+    if (value === lastSentRef.current) {
+      displayedRef.current = value;
+      setDisplayed(value);
+      return;
+    }
+    // Don't tween into a field the user is actively editing.
+    if (focusedRef.current || reducedMotionRef.current) {
+      displayedRef.current = value;
+      setDisplayed(value);
+      lastSentRef.current = value;
+      return;
+    }
+
+    const from = displayedRef.current;
+    const to = value;
+    if (from === to) {
+      lastSentRef.current = value;
+      return;
+    }
+
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / COUNT_UP_MS);
+      const eased = easeOutCubic(t);
+      const raw = from + (to - from) * eased;
+      // Round during tween for clean integer counting; snap to exact target
+      // at the end so fractional values (e.g. YoY %) land precisely.
+      const settled = t >= 1 ? to : Math.round(raw);
+      displayedRef.current = settled;
+      setDisplayed(settled);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+        lastSentRef.current = to;
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [value]);
+
+  const display = formatWithCommas(displayed);
 
   useLayoutEffect(() => {
     const input = ref.current;
@@ -55,6 +137,14 @@ export function MoneyInput({ value, onChange, ...rest }: MoneyInputProps) {
     }
     pendingCursor.current = nextPos;
 
+    // Cancel any running tween — the user is driving the value now.
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastSentRef.current = numeric;
+    displayedRef.current = numeric;
+    setDisplayed(numeric);
     onChange(numeric);
   };
 
@@ -65,6 +155,14 @@ export function MoneyInput({ value, onChange, ...rest }: MoneyInputProps) {
       inputMode="decimal"
       value={display}
       onChange={handleChange}
+      onFocus={(e) => {
+        focusedRef.current = true;
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        onBlur?.(e);
+      }}
       {...rest}
     />
   );
